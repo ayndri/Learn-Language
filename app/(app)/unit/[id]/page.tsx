@@ -9,6 +9,18 @@ import { ITEM_REGISTRY, generatedItemTypes, implementedItemTypes } from '@/lib/i
 import { levelStyle } from '@/lib/languages/levels'
 import { PrepareUnit } from './PrepareUnit'
 
+/**
+ * Batas durasi fungsi serverless.
+ *
+ * Default Vercel 10 detik, dan itu TIDAK cukup: satu panggilan Gemini butuh
+ * 5-15 detik, dan koreksi tulisan bisa lebih. Tanpa ini, penyiapan pelajaran
+ * dan generate soal akan gagal di produksi padahal jalan mulus di lokal.
+ *
+ * Server action mewarisi konfigurasi dari route tempat ia dipanggil, jadi
+ * nilainya diset di halamannya, bukan di file action.
+ */
+export const maxDuration = 60
+
 export default async function UnitPage({ params }: { params: Promise<{ id: string }> }) {
   const userId = await currentUserId()
   if (!userId) redirect('/login')
