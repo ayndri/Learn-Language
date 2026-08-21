@@ -162,6 +162,53 @@ body {
   font-family: 'Noto Sans SC', 'Microsoft YaHei', 'PingFang SC', 'Heiti SC', var(--font-sans);
 }
 
+/* Baris yang digeser mendatar (tab bagian materi, peta soal simulasi).
+
+   Scrollbar-nya DISEMBUNYIKAN, bukan digayakan. Di Windows yang muncul adalah
+   scrollbar bawaan bertombol panah di kedua ujungnya — setinggi 17px, abu-abu
+   penuh, dan lebih menonjol daripada tab yang seharusnya jadi isinya. Tidak ada
+   nilai gunanya di baris setinggi 40px: menggeser dilakukan dengan swipe, roda
+   mouse, atau menyeret tab-nya.
+
+   Gantinya `mask-image`: kedua ujung baris memudar, jadi tab yang terpotong
+   terlihat MENGHILANG ke tepi alih-alih terpotong rata. Itu yang membuat
+   penyembunyian scrollbar tidak menghilangkan petunjuknya — terpotong rata
+   terbaca seperti "sudah habis", memudar terbaca seperti "masih ada lagi".
+
+   Masknya TETAP, tidak mengikuti posisi geser. Artinya ujung kiri ikut memudar
+   walaupun sudah di paling kiri, dan itu memang kompromi yang diambil: yang
+   mengikuti posisi geser butuh `animation-timeline: scroll()` yang dukungannya
+   masih timpang, atau pengukuran di JavaScript untuk sesuatu yang murni hiasan.
+   Kompromi ini nyaris tidak terlihat karena pembungkusnya memakai `-mx-4 px-4`:
+   1rem dari 1.25rem gradiennya jatuh di padding yang memang kosong, jadi yang
+   benar-benar tersentuh cuma ±4px tepi tab pertama. */
+@utility scroll-row {
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Edge lama */
+  scroll-behavior: smooth;
+  /* Memudar 1.25rem di kedua ujung. Nilainya sengaja kecil: kalau terlalu lebar,
+     label tab ikut pudar dan jadi susah dibaca, bukan cuma jadi petunjuk. */
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 1.25rem,
+    black calc(100% - 1.25rem),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 1.25rem,
+    black calc(100% - 1.25rem),
+    transparent 100%
+  );
+}
+
+.scroll-row::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
+}
+
 /* ---------------------------------------------------------------------------
  * Class komponen.
  *

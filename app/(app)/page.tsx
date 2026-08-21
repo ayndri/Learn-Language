@@ -12,6 +12,7 @@ import { activeLanguageCode } from '@/lib/study/active'
 import { decideNext, listTracks, trackProgress } from '@/lib/study/next'
 import { dueByLanguage } from '@/lib/study/queue'
 import { switchLanguageAction } from './actions'
+import { LanguageChips } from './LanguageChips'
 
 /**
  * Ujian apa saja yang tersedia, DITURUNKAN dari daftar formatnya.
@@ -173,45 +174,22 @@ export default async function DashboardPage({
       {/* --- pemilih bahasa: hanya muncul kalau memang ada pilihan --- */}
       {(tracks.length > 1 || canAdd) && (
         <form action={switchLanguageAction} className="flex flex-wrap items-center gap-1.5">
-          {tracks.map((t) => {
-            const on = t.code === progress.language.code
-            const due = duePerLanguage.get(t.languageId) ?? 0
-            return (
-              <button
-                key={t.trackId}
-                type="submit"
-                name="code"
-                value={t.code}
-                aria-pressed={on}
-                className={`badge gap-1.5 px-3 py-1.5 transition ${
-                  on ? 'bg-brand text-white' : 'bg-canvas text-muted hover:text-ink'
-                }`}
-              >
-                {t.name}
-                <span className="opacity-60">{t.nativeName}</span>
-                {/*
-                  Angka jatuh tempo, dan HANYA kalau ada isinya.
-                  Lencana "0" di lima bahasa cuma jadi derau yang membuat angka
-                  yang benar-benar penting ikut tidak dilihat. Yang perlu menarik
-                  mata adalah bahasa yang sedang menumpuk — bukan yang bersih.
-
-                  Ditampilkan juga pada bahasa yang SEDANG aktif, karena kalau
-                  disembunyikan di situ, satu-satunya bahasa yang tidak
-                  memperlihatkan tumpukannya justru yang sedang kamu buka.
-                */}
-                {due > 0 && (
-                  <span
-                    aria-label={`${due} kartu jatuh tempo`}
-                    className={`-mr-1 rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${
-                      on ? 'bg-white/25 text-white' : 'bg-warn-soft text-warn'
-                    }`}
-                  >
-                    {due}
-                  </span>
-                )}
-              </button>
-            )
-          })}
+          {/*
+            Tombolnya dipisah ke komponen client supaya bisa memperlihatkan
+            keadaan "sedang pindah" — lihat catatan di LanguageChips.tsx.
+            `<form>` dan server action-nya TETAP di sini, jadi pemilih bahasa
+            masih berfungsi sebelum JavaScript selesai dimuat.
+          */}
+          <LanguageChips
+            activeCode={progress.language.code}
+            chips={tracks.map((t) => ({
+              trackId: t.trackId,
+              code: t.code,
+              name: t.name,
+              nativeName: t.nativeName,
+              due: duePerLanguage.get(t.languageId) ?? 0,
+            }))}
+          />
           {canAdd && (
             <Link
               href="/start"
@@ -289,7 +267,7 @@ export default async function DashboardPage({
 
         {/* --- tab bagian materi --- */}
         {strands.length > 1 && (
-          <div className="-mx-4 overflow-x-auto px-4">
+          <div className="scroll-row -mx-4 px-4">
             <div className="flex w-max gap-1.5">
               {strands.map((s) => {
                 const on = s.strand.id === openTab?.strand.id
