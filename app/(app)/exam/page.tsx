@@ -3,9 +3,10 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { currentUserId } from '@/auth'
 import { db } from '@/lib/db'
-import { exams } from '@/lib/db/schema'
-import { SECTION_MINUTES, questionCount } from '@/lib/exam/blueprint'
-import { CreateExam } from './CreateExam'
+import { exams, languages } from '@/lib/db/schema'
+import { countsBySection, questionCount, sectionMinutes, totalMinutes } from '@/lib/exam/blueprint'
+import { examFormat, formatsForLanguages, type ExamSection } from '@/lib/exam/formats'
+import { CreateExam, type FormatChoice } from './CreateExam'
 
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   planned: { text: 'belum disiapkan', cls: 'bg-warn-soft text-warn' },
@@ -25,13 +26,39 @@ export default async function ExamListPage() {
     .orderBy(desc(exams.createdAt))
     .limit(20)
 
-  const totalMinutes = SECTION_MINUTES[1] + SECTION_MINUTES[2] + SECTION_MINUTES[3]
+  // Hanya format untuk bahasa yang sudah diaktifkan. Menawarkan simulasi JLPT
+  // saat bahasa Jepang masih mati cuma menghasilkan pesan error setelah diklik.
+  const enabled = await db
+    .select({ code: languages.code })
+    .from(languages)
+    .where(eq(languages.enabled, true))
+
+  const choices: FormatChoice[] = formatsForLanguages(enabled.map((l) => l.code)).map((f) => {
+    const counts = countsBySection(f.id, 'full')
+    return {
+      id: f.id,
+      label: f.label,
+      note: f.note,
+      sections: ([1, 2, 3] as ExamSection[])
+        .filter((s) => counts[s] > 0)
+        .map((s) => ({
+          name: f.sections[s],
+          questions: counts[s],
+          minutes: sectionMinutes(f.id, s, 'full'),
+        })),
+      sizes: (['full', 'short'] as const).map((size) => ({
+        size,
+        questions: questionCount(f.id, size),
+        minutes: totalMinutes(f.id, size),
+      })),
+    }
+  })
 
   return (
     <main className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-lg font-bold tracking-tight">Simulasi TOEFL ITP</h1>
+          <h1 className="text-lg font-bold tracking-tight">Simulasi ujian</h1>
           <p className="mt-0.5 text-[13px] text-muted">
             Soalnya dibuat baru tiap kali, jadi tidak bisa dihafal.
           </p>
@@ -41,30 +68,7 @@ export default async function ExamListPage() {
         </Link>
       </div>
 
-      <section className="card overflow-hidden">
-        <div className="bg-brand-soft/70 px-5 py-4">
-          <p className="text-sm font-bold">Struktur tes aslinya</p>
-          <p className="mt-0.5 text-[13px] text-brand">
-            {questionCount('full')} soal · ±{totalMinutes} menit
-          </p>
-        </div>
-        <ul className="divide-y divide-line text-sm">
-          <li className="flex items-center justify-between px-5 py-2.5">
-            <span>1 · Listening Comprehension</span>
-            <span className="text-faint">50 soal · {SECTION_MINUTES[1]} mnt</span>
-          </li>
-          <li className="flex items-center justify-between px-5 py-2.5">
-            <span>2 · Structure &amp; Written Expression</span>
-            <span className="text-faint">40 soal · {SECTION_MINUTES[2]} mnt</span>
-          </li>
-          <li className="flex items-center justify-between px-5 py-2.5">
-            <span>3 · Reading Comprehension</span>
-            <span className="text-faint">50 soal · {SECTION_MINUTES[3]} mnt</span>
-          </li>
-        </ul>
-      </section>
-
-      <CreateExam />
+      <CreateExam formats={choices} />
 
       <section className="space-y-3">
         <h2 className="text-[13px] font-bold tracking-wide text-faint uppercase">Riwayat</h2>
@@ -75,6 +79,7 @@ export default async function ExamListPage() {
           <ul className="card divide-y divide-line overflow-hidden">
             {rows.map((e) => {
               const st = STATUS_LABEL[e.status] ?? STATUS_LABEL.planned
+              const format = examFormat(e.kind)
               return (
                 <li key={e.id}>
                   <Link
@@ -83,9 +88,10 @@ export default async function ExamListPage() {
                   >
                     <span className="min-w-0">
                       <span className="block text-sm font-medium">
+                        {format.short} ·{' '}
                         {e.size === 'full' ? 'Simulasi penuh' : 'Latihan cepat'}
                         <span className="ml-1.5 text-xs font-normal text-faint">
-                          {questionCount(e.size)} soal
+                          {questionCount(e.kind, e.size)} soal
                         </span>
                       </span>
                       <span className="block text-xs text-faint">

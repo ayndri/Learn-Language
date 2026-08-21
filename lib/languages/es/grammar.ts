@@ -1,0 +1,159 @@
+import type { CurriculumEntry } from '@/lib/languages/curriculum'
+
+/**
+ * KURIKULUM TATA BAHASA SPANYOL — A1 → C2
+ *
+ * Ditulis sebagai data dengan alasan yang sama seperti tiga bahasa sebelumnya:
+ * kelengkapan hanya bisa diperiksa kalau daftarnya bisa dibaca. Bahasa Spanyol
+ * adalah bahasa terakhir yang masih memakai silabus buatan AI di aplikasi ini,
+ * dan itu terasa justru di tempat yang paling penting — silabus karangan AI
+ * hampir selalu menaruh *subjuntivo* sebagai satu pelajaran bernama
+ * "Subjunctive Mood", padahal itu enam kala, empat pemicu, dan aturan korelasi
+ * waktu tersendiri. Pelajar tidak punya cara mengetahui ada yang bolong.
+ *
+ * Pembagiannya jadi DUA bagian materi, dan untuk bahasa Spanyol pemisahan itu
+ * yang paling tajam di antara semua bahasa di sini:
+ *
+ *   imbuhan (konjugasi) — Bahasa Spanyol adalah kebalikan dari bahasa Mandarin.
+ *                         Mandarin tidak berkonjugasi sama sekali; Spanyol
+ *                         berkonjugasi sampai satu kata kerja punya lebih dari
+ *                         lima puluh bentuk (tiga golongan × belasan kala ×
+ *                         enam persona, plus batang yang berubah). Dan bentuk
+ *                         itu MENGGANTIKAN kata ganti: `hablo` sudah berarti
+ *                         "saya bicara" tanpa `yo`. Salah akhiran bukan salah
+ *                         ejaan — itu salah orang. Karena itu konjugasi berdiri
+ *                         sendiri, bukan diselipkan sebagai catatan di tiap
+ *                         pelajaran pola kalimat. Imbuhan pembentuk kata
+ *                         (-ción, -dad, -mente, -ito) ikut di bagian ini.
+ *
+ *   tatabahasa          — pola kalimat: kapan memakai bentuk yang mana, dan
+ *                         bagaimana kata-kata disusun.
+ *
+ * Levelnya CEFR (A1–C2), dan untuk bahasa Spanyol ini bukan pilihan sembarang:
+ * DELE — ujian resmi Instituto Cervantes — memang diselenggarakan per tingkat
+ * CEFR, satu ujian untuk tiap tingkat dari A1 sampai C2. Jadi level di sini
+ * langsung sepadan dengan ujiannya, tidak seperti JLPT atau TOPIK yang punya
+ * penamaan sendiri.
+ *
+ * Sumber pembagian per level: Plan Curricular del Instituto Cervantes (PCIC) —
+ * dan ini satu-satunya bahasa di aplikasi ini yang daftar resminya memang
+ * DITERBITKAN per tingkat. Yang dijamin cakupannya; penempatan tiap butirnya
+ * masih mengikuti konsensus buku ajar.
+ */
+
+const A1: CurriculumEntry[] = [
+  // ------------------------------------------------------- imbuhan (7)
+  { level: 'A1', strand: 'imbuhan', title: 'Gender dan Jamak Kata Benda', focus: 'Gender: -o umumnya maskulin, -a feminin, beserta pengecualian yang sering dipakai (el problema, el día, la mano) · jamak -s / -es / -ces (lápiz → lápices)', context: 'menyebut benda dengan artikel yang benar' },
+  { level: 'A1', strand: 'imbuhan', title: 'Kesesuaian Kata Sifat', focus: 'Kata sifat mengikuti gender DAN jumlah kata bendanya: alto/alta/altos/altas · sifat berakhir -e atau konsonan tidak berubah gender (grande, feliz) · dan letaknya SESUDAH kata benda (una casa blanca)', context: 'menggambarkan orang dan benda' },
+  { level: 'A1', strand: 'imbuhan', title: 'Presente: Tiga Golongan', focus: 'Presente de indicativo reguler: -ar (hablo, hablas, habla, hablamos, habláis, hablan), -er (como…), -ir (vivo…) — enam persona, dan akhiran itu SUDAH menyatakan siapa, jadi kata gantinya boleh dibuang', context: 'menceritakan kebiasaan sehari-hari' },
+  { level: 'A1', strand: 'imbuhan', title: 'Presente: Empat Verba Wajib', focus: 'ser (soy, eres, es…), estar (estoy, estás…), tener (tengo, tienes…), ir (voy, vas…) — empat verba paling sering dipakai dan keempatnya tak beraturan; dihafal sebagai satu paket, bukan ditemukan satu-satu', context: 'kalimat pertama yang bisa kamu buat' },
+  { level: 'A1', strand: 'imbuhan', title: 'Presente: Batang yang Berubah', focus: 'Verbos con cambio vocálico: e→ie (querer → quiero, pensar → pienso), o→ue (poder → puedo, dormir → duermo), e→i (pedir → pido) — DAN aturannya: bentuk nosotros/vosotros tidak berubah (queremos, no *quieremos)', context: 'kata kerja sehari-hari yang batangnya bergeser' },
+  { level: 'A1', strand: 'imbuhan', title: 'Presente: Tak Beraturan Lainnya', focus: 'Tak beraturan hanya di yo: hacer → hago, poner → pongo, salir → salgo, conocer → conozco, dar → doy, saber → sé, ver → veo · dan yang sama sekali beda: haber, decir, venir, oír', context: 'melengkapi seluruh pola presente' },
+  { level: 'A1', strand: 'imbuhan', title: 'Verba Refleksif', focus: 'Verbos reflexivos: llamarse, levantarse, ducharse, acostarse — pronomina me/te/se/nos/os/se yang WAJIB dan letaknya sebelum verba (me llamo, se levanta), atau menempel di infinitivo (levantarse)', context: 'menceritakan rutinitas pagi' },
+
+  // ------------------------------------------------------- tatabahasa (11)
+  { level: 'A1', strand: 'tatabahasa', title: 'Ser atau Estar', focus: 'Dua kata "adalah" yang tidak saling menggantikan: ser untuk identitas, asal, profesi, sifat tetap (soy indonesio) · estar untuk keadaan sementara, lokasi, dan perasaan (estoy cansado, está en casa) · es guapo ≠ está guapo', context: 'perbedaan yang paling menentukan di bahasa Spanyol' },
+  { level: 'A1', strand: 'tatabahasa', title: 'Artikel', focus: 'el/la/los/las (tertentu) dan un/una/unos/unas (tak tertentu) · el + kata feminin berawal a bertekanan (el agua, el aula) · kapan TANPA artikel (soy profesor, no hay pan)', context: 'menyebut benda di sekitar' },
+  { level: 'A1', strand: 'tatabahasa', title: 'Ada: Hay', focus: 'hay untuk menyatakan keberadaan tanpa menyebut yang mana (hay un banco aquí) vs estar untuk letak yang sudah diketahui (el banco está allí) · hay + tanpa artikel tertentu, dan itu aturannya', context: 'menggambarkan isi sebuah ruangan' },
+  { level: 'A1', strand: 'tatabahasa', title: 'Ini, Itu, Yang Di Sana', focus: 'Demostrativos tiga arah: este/esta (dekat aku), ese/esa (dekat kamu), aquel/aquella (jauh dari keduanya) — beserta jamak dan bentuk netral esto/eso/aquello', context: 'menunjuk barang saat berbelanja' },
+  { level: 'A1', strand: 'tatabahasa', title: 'Kepemilikan', focus: 'Posesivos mi/tu/su/nuestro/vuestro/su + kata benda, dan bahwa su bisa berarti "-nya" ATAU "Anda" · de + orang (el libro de María) · bentuk panjang mío/tuyo/suyo', context: 'membicarakan keluarga dan barang milik' },
+  { level: 'A1', strand: 'tatabahasa', title: 'Kata Tanya', focus: 'qué, quién/quiénes, dónde, cuándo, por qué, cómo, cuánto/cuánta/cuántos, cuál — semuanya BERAKSEN, dan cuál vs qué adalah pasangan yang paling sering tertukar (¿Cuál es tu nombre? bukan ¿Qué es tu nombre?)', context: 'menggali informasi dari orang baru' },
+  { level: 'A1', strand: 'tatabahasa', title: 'Negasi Berganda', focus: 'no + verba, dan aturan yang kebalikan dari bahasa Inggris: negasi ganda WAJIB — no veo nada (bukan *veo nada), no viene nadie, no voy nunca · tampoco, ni…ni…', context: 'menyatakan tidak, tidak ada, dan tidak pernah' },
+  { level: 'A1', strand: 'tatabahasa', title: 'Suka: Gustar', focus: 'Struktur terbalik yang harus dipahami sebagai POLA, bukan dihafal per kalimat: me gusta el café (kopi menyenangkan bagiku) · me gustan los libros — verba mengikuti BENDANYA, bukan orangnya · encantar, doler, interesar, parecer memakai pola sama', context: 'membicarakan kesukaan' },
+  { level: 'A1', strand: 'tatabahasa', title: 'Angka, Jam, dan Tanggal', focus: '0–100 dan ratusan · ¿Qué hora es? — es la una, son las dos y media · hari dan bulan tanpa huruf besar (lunes, enero) · el 5 de mayo de 2024 · tanggal urut kecil ke besar', context: 'membuat janji' },
+  { level: 'A1', strand: 'tatabahasa', title: 'Harus dan Akan', focus: 'tener que + infinitivo (kewajiban pribadi), hay que + infinitivo (kewajiban umum), ir a + infinitivo (rencana) — tiga perífrasis yang menggantikan kala masa depan di percakapan sehari-hari', context: 'membicarakan rencana dan kewajiban' },
+  { level: 'A1', strand: 'tatabahasa', title: 'Preposisi Dasar', focus: 'a, de, en, con, desde, hasta · penggabungan wajib a+el → al, de+el → del · a personal (veo a María, bukan *veo María) — aturan yang tidak ada di bahasa Indonesia maupun Inggris', context: 'menyebut tempat, arah, dan milik' },
+]
+
+const A2: CurriculumEntry[] = [
+  // ------------------------------------------------------- imbuhan (8)
+  { level: 'A2', strand: 'imbuhan', title: 'Pretérito Indefinido Reguler', focus: '-ar (hablé, hablaste, habló, hablamos, hablasteis, hablaron) dan -er/-ir (comí, comiste, comió…) · perhatikan aksennya: hablo (sekarang) vs habló (lampau) cuma beda satu tanda', context: 'bercerita tentang kejadian kemarin' },
+  { level: 'A2', strand: 'imbuhan', title: 'Pretérito Indefinido Tak Beraturan', focus: 'Kelompok batang tak beraturan yang akhirannya SAMA dan tanpa aksen: tener → tuve, estar → estuve, poder → pude, hacer → hice, decir → dije, venir → vine, querer → quise · plus ser/ir → fui (satu bentuk untuk dua verba) dan dar → di', context: 'menceritakan pengalaman lampau' },
+  { level: 'A2', strand: 'imbuhan', title: 'Pretérito Imperfecto', focus: '-aba (hablaba) dan -ía (comía, vivía) — hanya TIGA verba tak beraturan di seluruh kala ini: ser (era), ir (iba), ver (veía). Kala yang paling mudah dibentuk dan paling sulit dipakai', context: 'menggambarkan masa lalu dan kebiasaan lampau' },
+  { level: 'A2', strand: 'imbuhan', title: 'Participio dan Pretérito Perfecto', focus: 'Participio -ado/-ido plus yang tak beraturan (hecho, dicho, visto, puesto, escrito, abierto, vuelto, muerto) · haber + participio (he hablado) — dan participio TIDAK berubah gender di kala ini', context: 'membicarakan hal yang sudah terjadi' },
+  { level: 'A2', strand: 'imbuhan', title: 'Gerundio', focus: '-ando / -iendo plus perubahan ejaan (leer → leyendo, dormir → durmiendo, pedir → pidiendo) · estar + gerundio untuk yang sedang berlangsung · seguir/llevar + gerundio', context: 'menceritakan apa yang sedang terjadi' },
+  { level: 'A2', strand: 'imbuhan', title: 'Futuro Simple', focus: 'Akhiran ditempel ke INFINITIVO utuh, satu pola untuk ketiga golongan (hablaré, comeré, viviré) · dua belas batang tak beraturan yang harus dihafal (tendré, haré, diré, podré, saldré, vendré, pondré, sabré, querré, habrá, cabré, valdré)', context: 'membicarakan masa depan' },
+  { level: 'A2', strand: 'imbuhan', title: 'Pronomina Objek', focus: 'Objek langsung lo/la/los/las dan tak langsung le/les · letaknya SEBELUM verba (lo veo) atau menempel pada infinitivo/gerundio/imperativo (verlo, viéndolo, míralo) · dua sekaligus: urutan tak langsung dulu, dan le+lo → SE lo (se lo doy)', context: 'membicarakan orang dan benda tanpa mengulang namanya' },
+  { level: 'A2', strand: 'imbuhan', title: 'Imperativo Afirmatif', focus: 'tú: bentuk sama dengan él (habla, come) plus delapan tak beraturan (di, haz, ve, pon, sal, sé, ten, ven) · usted/ustedes memakai bentuk subjuntivo (hable, hablen) · pronomina MENEMPEL di belakang (dímelo)', context: 'memberi arahan dan resep' },
+
+  // ------------------------------------------------------- tatabahasa (9)
+  { level: 'A2', strand: 'tatabahasa', title: 'Indefinido atau Imperfecto', focus: 'Perbedaan yang paling menentukan di seluruh bahasa Spanyol, dan tidak ada padanannya di bahasa Indonesia: indefinido untuk kejadian yang SELESAI dan menggerakkan cerita (ayer fui, de repente sonó), imperfecto untuk latar, kebiasaan, dan gambaran (era joven, todos los días iba) · dua-duanya dalam satu cerita: leía cuando llegó', context: 'bercerita dengan latar dan kejadian' },
+  { level: 'A2', strand: 'tatabahasa', title: 'Perfecto atau Indefinido', focus: 'Perfecto untuk waktu yang MASIH berlangsung atau tanpa waktu tertentu (hoy he comido, ya he visto, nunca he ido), indefinido untuk waktu yang sudah tertutup (ayer comí) · dan catatan penting: di Amerika Latin indefinido dipakai jauh lebih luas daripada di Spanyol', context: 'membicarakan pengalaman dan pencapaian' },
+  { level: 'A2', strand: 'tatabahasa', title: 'Por atau Para', focus: 'Pasangan preposisi yang paling sering salah, dan sumber kesalahannya satu: keduanya diterjemahkan "untuk". por = sebab, pertukaran, lewat, durasi, oleh (gracias por, por la calle, por dos horas) · para = tujuan, penerima, batas waktu, pendapat (para ti, para mañana, para mí)', context: 'menjelaskan tujuan dan alasan' },
+  { level: 'A2', strand: 'tatabahasa', title: 'Perbandingan', focus: 'más/menos … que, tan … como, tanto/tanta/tantos … como · bentuk tak beraturan mejor, peor, mayor, menor · superlatif el/la más … de dan akhiran -ísimo (buenísimo, carísimo)', context: 'membandingkan pilihan' },
+  { level: 'A2', strand: 'tatabahasa', title: 'Perífrasis Verbal', focus: 'acabar de (baru saja), volver a (lagi), empezar a, dejar de (berhenti), seguir + gerundio (masih), soler + infinitivo (biasa), ponerse a (mulai mendadak) — cara bahasa Spanyol menyatakan aspek tanpa kala baru', context: 'menyampaikan nuansa waktu yang halus' },
+  { level: 'A2', strand: 'tatabahasa', title: 'Adverbia dan Kekerapan', focus: 'Pembentukan -mente dari bentuk feminin (rápida → rápidamente) · siempre, casi siempre, a menudo, a veces, casi nunca, nunca, ya, todavía, aún · dan letaknya yang lebih bebas daripada bahasa Inggris', context: 'membandingkan kebiasaan' },
+  { level: 'A2', strand: 'tatabahasa', title: 'Se Impersonal dan Pasif', focus: 'se + verba orang ketiga untuk pernyataan tanpa pelaku: se habla español, se venden casas, ¿cómo se dice…? · bedanya dengan pasif ser + participio yang jauh lebih jarang dipakai dalam percakapan', context: 'membaca papan pengumuman dan aturan' },
+  { level: 'A2', strand: 'tatabahasa', title: 'Kata Penghubung', focus: 'porque, por eso, aunque, pero, sin embargo, además, entonces, así que, es decir · beda porque (sebab) dan por qué (kenapa) dan porqué (alasan)', context: 'merangkai dua kalimat' },
+  { level: 'A2', strand: 'tatabahasa', title: 'Tú, Usted, dan Vosotros', focus: 'Sistem sapaan yang harus dipilih dan bukan opsional: tú (akrab) vs usted (hormat, memakai bentuk verba orang ketiga) · vosotros dipakai di Spanyol, ustedes di seluruh Amerika Latin · dan voseo (vos hablás) di Argentina, Uruguay, Amerika Tengah', context: 'memilih sapaan yang tidak menyinggung' },
+]
+
+const B1: CurriculumEntry[] = [
+  // ------------------------------------------------------- imbuhan (6)
+  { level: 'B1', strand: 'imbuhan', title: 'Presente de Subjuntivo', focus: 'Pembentukannya: ambil bentuk yo presente, tukar vokal akhirannya (hablo → hable, como → coma) · tak beraturan yang mengikuti yo (tenga, haga, salga, conozca) dan enam yang berdiri sendiri (sea, esté, vaya, sepa, dé, haya)', context: 'bentuk yang membuka separuh bahasa Spanyol' },
+  { level: 'B1', strand: 'imbuhan', title: 'Imperativo Negatif', focus: 'no + subjuntivo untuk SEMUA orang (no hables, no coma, no vayan) — dan akibatnya: pronomina yang menempel di imperativo positif kembali ke depan (dímelo → no me lo digas)', context: 'melarang dan memberi peringatan' },
+  { level: 'B1', strand: 'imbuhan', title: 'Condicional Simple', focus: 'Akhiran -ía ditempel ke infinitivo (hablaría), dengan dua belas batang tak beraturan yang SAMA dengan futuro (tendría, haría, diría, podría) · dipakai untuk kesopanan (querría), saran (yo iría), dan hal yang tidak nyata', context: 'meminta dengan halus dan berandai-andai' },
+  { level: 'B1', strand: 'imbuhan', title: 'Pluscuamperfecto', focus: 'había + participio (había hablado) untuk kejadian yang lebih dulu terjadi di masa lalu · dipakai bersama indefinido: cuando llegué, ya se habían ido', context: 'menyusun urutan kejadian masa lalu' },
+  { level: 'B1', strand: 'imbuhan', title: 'Imbuhan Pembentuk Kata', focus: 'Sufijo yang mengubah kelas kata: -ción/-sión (informar → información), -dad (real → realidad), -miento, -eza, -ista, -able/-ible · prefijo des-, in-, re-, pre- · satu akar jadi enam kata, dan itu enam kali lebih cepat daripada menghafalnya satu-satu', context: 'memperluas kosakata secara sistematis' },
+  { level: 'B1', strand: 'imbuhan', title: 'Diminutif dan Augmentatif', focus: '-ito/-ita, -illo, -cito (cafecito, ahorita) dan -ón/-azo/-ote — dan yang penting: ini jarang soal UKURAN. -ito melembutkan, mengakrabkan, atau merendahkan; un momentito bukan momen yang lebih pendek', context: 'terdengar akrab, bukan kaku' },
+
+  // ------------------------------------------------------- tatabahasa (10)
+  { level: 'B1', strand: 'tatabahasa', title: 'Subjuntivo: Keinginan dan Perasaan', focus: 'Pemicu subjuntivo pertama: querer que, esperar que, preferir que, me alegra que, me molesta que, es importante que, ojalá · dan aturan dua subjek: quiero ir (satu subjek, infinitivo) vs quiero que vayas (dua subjek, subjuntivo)', context: 'menyampaikan keinginan dan perasaan tentang orang lain' },
+  { level: 'B1', strand: 'tatabahasa', title: 'Subjuntivo: Keraguan dan Negasi', focus: 'Pemicu kedua: no creo que, dudo que, no es verdad que, es posible que, quizá/tal vez · dan sisi kebalikannya yang sering dilupakan — creo que memakai INDICATIVO, jadi yang menentukan bukan verbanya tapi ada-tidaknya negasi', context: 'menyatakan pendapat dan keraguan' },
+  { level: 'B1', strand: 'tatabahasa', title: 'Subjuntivo: Waktu dan Tujuan', focus: 'cuando, hasta que, en cuanto, antes de que + subjuntivo kalau belum terjadi (cuando llegue) tapi INDICATIVO kalau kebiasaan atau sudah terjadi (cuando llego, siempre…) · para que dan a fin de que selalu subjuntivo', context: 'membicarakan rencana dan syarat waktu' },
+  { level: 'B1', strand: 'tatabahasa', title: 'Klausa Relatif', focus: 'que, quien, el/la que, donde, cuyo · preposisi + relativo (la casa en la que vivo) · dan pilihan modus: busco un piso que tiene balcón (ada, spesifik) vs busco un piso que tenga balcón (belum tentu ada)', context: 'menjelaskan orang dan benda secara rinci' },
+  { level: 'B1', strand: 'tatabahasa', title: 'Kalimat Bersyarat 1 dan 2', focus: 'Tipe nyata: si + presente, futuro/imperativo (si llueve, no salgo) · tipe tidak nyata: si + imperfecto de subjuntivo, condicional (si tuviera dinero, viajaría) — dan aturan mutlak: si TIDAK PERNAH diikuti presente de subjuntivo', context: 'berandai-andai tentang hidup' },
+  { level: 'B1', strand: 'tatabahasa', title: 'Kalimat Tak Langsung', focus: 'Estilo indirecto: pergeseran kala (dice que viene → dijo que venía), pergeseran pronomina, keterangan waktu (hoy → aquel día), dan perintah yang jadi subjuntivo (¡ven! → me dijo que fuera)', context: 'menyampaikan ulang perkataan orang' },
+  { level: 'B1', strand: 'tatabahasa', title: 'Ser dan Estar Tingkat Lanjut', focus: 'Kata sifat yang BERUBAH ARTI: ser listo (pintar) vs estar listo (siap), ser aburrido (membosankan) vs estar aburrido (bosan), ser bueno/estar bueno, ser rico/estar rico · estar + participio sebagai hasil (la puerta está cerrada)', context: 'perbedaan yang tetap menjebak sampai tingkat lanjut' },
+  { level: 'B1', strand: 'tatabahasa', title: 'Menduga dan Kemungkinan', focus: 'deber de + infinitivo (pasti/mungkin), poder que, a lo mejor + indicativo vs quizá + subjuntivo · futuro untuk dugaan (¿Dónde está? — Estará en casa) — pemakaian yang tidak ada hubungannya dengan masa depan', context: 'menduga situasi dari petunjuk' },
+  { level: 'B1', strand: 'tatabahasa', title: 'Pasif dan Menghindarinya', focus: 'ser + participio (yang participio-nya BERUBAH gender: fue construida) · se pasiva refleja (se construyeron casas) · dan kenyataan yang harus dinyatakan: bahasa Spanyol lebih suka menghindari pasif daripada memakainya, kebalikan dari bahasa Inggris akademik', context: 'menjelaskan proses dan berita' },
+  { level: 'B1', strand: 'tatabahasa', title: 'Penanda Wacana', focus: 'en primer lugar, por un lado…por otro, sin embargo, no obstante, en cambio, por lo tanto, en resumen, de hecho — beserta tanda baca yang menyertainya', context: 'menyusun argumen dalam tulisan' },
+]
+
+const B2: CurriculumEntry[] = [
+  // ------------------------------------------------------- imbuhan (4)
+  { level: 'B2', strand: 'imbuhan', title: 'Imperfecto de Subjuntivo', focus: 'Dibentuk dari indefinido orang ketiga jamak: hablaron → hablara/hablase, tuvieron → tuviera, fueron → fuera · DUA bentuk yang sepenuhnya bertukar (-ra lebih lazim di percakapan, -se lebih tulis)', context: 'kunci seluruh pengandaian dan kesopanan tingkat lanjut' },
+  { level: 'B2', strand: 'imbuhan', title: 'Subjuntivo Perfecto dan Pluscuamperfecto', focus: 'haya + participio (que haya venido) dan hubiera/hubiese + participio (si hubiera sabido) · melengkapi keempat kala subjuntivo yang masih hidup dalam bahasa Spanyol modern', context: 'membicarakan penyesalan dan dugaan lampau' },
+  { level: 'B2', strand: 'imbuhan', title: 'Futuro Perfecto dan Condicional Compuesto', focus: 'habré hablado (akan sudah) dan habría hablado (akan sudah, kalau saja) · pemakaian dugaan: ya habrá llegado (mungkin sudah tiba)', context: 'menempatkan kejadian pada titik waktu tertentu' },
+  { level: 'B2', strand: 'imbuhan', title: 'Preposisi yang Mengikat', focus: 'Preposiciones regidas — verba dan kata sifat yang preposisinya TIDAK bisa ditebak: depender de, insistir en, soñar con, acordarse de, confiar en, quejarse de, darse cuenta de, estar dispuesto a · dan kesalahan turunannya: queísmo (*me acuerdo que) dan dequeísmo (*pienso de que)', context: 'menulis kalimat yang idiomatis' },
+
+  // ------------------------------------------------------- tatabahasa (10)
+  { level: 'B2', strand: 'tatabahasa', title: 'Korelasi Waktu Subjuntivo', focus: 'Aturan yang menentukan subjuntivo mana yang dipakai: verba utama presente → subjuntivo presente/perfecto (quiero que vengas) · verba utama lampau atau condicional → subjuntivo imperfecto/pluscuamperfecto (quería que vinieras) · ini yang membuat subjuntivo bisa dipakai, bukan cuma dikenali', context: 'menyusun kalimat majemuk yang benar' },
+  { level: 'B2', strand: 'tatabahasa', title: 'Kalimat Bersyarat 3 dan Campuran', focus: 'si hubiera estudiado, habría aprobado (penyesalan) · condicional campuran (si hubiera estudiado, ahora estaría trabajando) · de haberlo sabido (bentuk padat tanpa si) · como si + imperfecto de subjuntivo', context: 'membicarakan penyesalan dan akibatnya sekarang' },
+  { level: 'B2', strand: 'tatabahasa', title: 'Konsesi', focus: 'aunque + indicativo (fakta yang diakui) vs + subjuntivo (kemungkinan atau informasi yang sudah diketahui bersama) · a pesar de que, por más/mucho que, si bien, aun cuando — perbedaan modus di sini mengubah maknanya, bukan cuma keformalannya', context: 'menyampaikan hal yang tetap terjadi' },
+  { level: 'B2', strand: 'tatabahasa', title: 'Sebab, Tujuan, dan Akibat', focus: 'Kausal: ya que, puesto que, dado que, como (di awal), debido a · final: para que, a fin de que, con el objetivo de · konsekutif: tan/tanto…que, de modo que + indicativo (akibat nyata) atau subjuntivo (tujuan)', context: 'menulis argumen dan laporan' },
+  { level: 'B2', strand: 'tatabahasa', title: 'Aspek Verbal Lanjutan', focus: 'llevar + gerundio (llevo dos años estudiando), venir + gerundio, andar + gerundio, acabar por, terminar de, dar por + participio, tener + participio — perífrasis yang menggantikan seluruh kala di bahasa lain', context: 'menyampaikan durasi dan penyelesaian' },
+  { level: 'B2', strand: 'tatabahasa', title: 'Pronomina: Norma dan Penyimpangan', focus: 'Pemakaian le/lo yang benar, leísmo yang DITERIMA (le vi a Juan) dan laísmo/loísmo yang tidak, pronomina ganda, dan pengulangan objek untuk penekanan (a mí me gusta)', context: 'menulis sesuai norma tanpa terdengar kaku' },
+  { level: 'B2', strand: 'tatabahasa', title: 'Nominalisasi dan Lo', focus: 'lo + kata sifat (lo importante, lo mejor), lo que (lo que dijo), lo de (lo de ayer) · mengubah klausa jadi frasa benda (decidieron rápido → su rápida decisión) — ciri utama tulisan formal Spanyol', context: 'memadatkan tulisan' },
+  { level: 'B2', strand: 'tatabahasa', title: 'Penanda Argumentatif', focus: 'en cuanto a, por lo que respecta a, cabe destacar, conviene señalar, dicho esto, ahora bien, es más, en definitiva — beserta modus yang menyertainya', context: 'menulis esai argumentatif' },
+  { level: 'B2', strand: 'tatabahasa', title: 'Ragam Bahasa Spanyol', focus: 'Perbedaan Spanyol–Amerika yang nyata dalam tata bahasa, bukan cuma kosakata: ustedes menggantikan vosotros, indefinido menggantikan perfecto, voseo (vos hablás, vos tenés) dan konjugasinya sendiri · plus kosakata yang bisa menyinggung antarwilayah', context: 'menulis untuk pembaca dari wilayah tertentu' },
+  { level: 'B2', strand: 'tatabahasa', title: 'Teman Palsu dan Kolokasi', focus: 'Falsos amigos yang menjebak penutur Indonesia dan Inggris: actualmente (kini, bukan sebenarnya), realizar (melaksanakan), embarazada (hamil), éxito (sukses), sensible (peka), asistir (menghadiri) · kolokasi yang benar tata bahasanya tapi tidak dipakai (hacer una pregunta, bukan *preguntar una pregunta)', context: 'menulis yang terdengar alami, bukan sekadar benar' },
+]
+
+const C1: CurriculumEntry[] = [
+  { level: 'C1', strand: 'imbuhan', title: 'Subjuntivo dalam Nuansa Halus', focus: 'Pilihan modus yang mengubah makna, bukan kebenaran: el hecho de que sea/es, no porque sea/es, el que + subjuntivo, quienquiera que · dan gaya: subjuntivo dalam klausa relatif untuk menyatakan syarat samar', context: 'menulis argumen yang presisi' },
+  { level: 'C1', strand: 'imbuhan', title: 'Bentuk yang Hampir Punah tapi Masih Muncul', focus: 'Futuro de subjuntivo (fuere, hubiere) di teks hukum, pretérito anterior, dan participio absoluto (terminada la reunión…) — jarang ditulis sendiri, tapi harus dikenali saat membaca', context: 'membaca dokumen resmi dan sastra' },
+  { level: 'C1', strand: 'tatabahasa', title: 'Urutan Kata sebagai Alat', focus: 'Bahasa Spanyol jauh lebih bebas urutannya daripada bahasa Inggris, dan kebebasan itu MEMBAWA MAKNA: subjek di belakang untuk informasi baru (llegó Juan), fokus di depan (a Juan lo vi ayer), dan tema-rema dalam paragraf', context: 'menulis paragraf yang mengalir' },
+  { level: 'C1', strand: 'tatabahasa', title: 'Kesantunan dan Pelunakan', focus: 'Atenuación: condicional untuk permintaan (querría, me gustaría), imperfecto de cortesía (venía a preguntar), pertanyaan tak langsung, dan pasif impersonal untuk menghindari menuduh — bahasa Spanyol melunakkan dengan KALA, bukan dengan kata tolong', context: 'menulis surat dan permintaan resmi' },
+  { level: 'C1', strand: 'tatabahasa', title: 'Verba dengan Preposisi yang Berubah Makna', focus: 'dar (dar con = menemukan, darse cuenta, dar por), echar (echar de menos, echarse a), llevar (llevarse bien), quedar (quedarse, quedar en), poner (ponerse a, ponerse de acuerdo) — satu verba, sepuluh makna, dan preposisinya yang menentukan', context: 'memahami percakapan penutur asli' },
+  { level: 'C1', strand: 'tatabahasa', title: 'Klausa Panjang yang Tetap Jelas', focus: 'Menggabungkan subordinasi bertingkat, participio, dan gerundio tanpa membuat kalimat berlari · gerundio yang SALAH (gerundio de posterioridad: *se cayó rompiéndose el brazo) dan kenapa itu kesalahan, bukan gaya', context: 'menulis esai dan laporan panjang' },
+  { level: 'C1', strand: 'tatabahasa', title: 'Impersonalitas', focus: 'Empat cara menghilangkan pelaku dan perbedaannya: se impersonal, tercera persona plural (dicen que), uno/una (uno nunca sabe), dan tú generik (si no estudias, no apruebas)', context: 'menulis objektif dan menyampaikan rumor' },
+  { level: 'C1', strand: 'tatabahasa', title: 'Kolokasi dan Kealamian', focus: 'Kombinasi yang benar tata bahasanya tapi tidak dipakai penutur asli: tomar una decisión, prestar atención, correr el riesgo, guardar silencio, sacar una foto, poner en marcha · verba pendukung yang tidak bisa diterjemahkan kata per kata', context: 'menulis yang terdengar seperti tulisan penutur asli' },
+  { level: 'C1', strand: 'tatabahasa', title: 'Penanda Wacana Tingkat Lanjut', focus: 'Reformulador (o sea, es decir, mejor dicho, en otras palabras), ordenador (a continuación, por último), operador argumentativo (de hecho, en realidad, por cierto), dan penempatannya dalam kalimat', context: 'menjaga alur teks panjang' },
+  { level: 'C1', strand: 'tatabahasa', title: 'Kesepakatan yang Rumit', focus: 'Concordancia pada kasus sulit: subjek majemuk, la mayoría de + verba tunggal atau jamak, nombre colectivo, porcentaje, ni…ni, uno de los que · dan concordancia ad sensum yang diterima', context: 'memeriksa ketepatan kalimat panjang' },
+  { level: 'C1', strand: 'tatabahasa', title: 'Register dan Laras', focus: 'Memilih laras: akademik (nominalisasi, pasif, subjuntivo), jurnalistik, hukum, percakapan — beserta penanda gramatikalnya, dan kenapa mencampur laras dalam satu tulisan lebih terlihat daripada kesalahan tata bahasa', context: 'menulis untuk pembaca yang berbeda' },
+  { level: 'C1', strand: 'tatabahasa', title: 'Menyunting Tulisan Sendiri', focus: 'Memangkas redundansi, memperbaiki queísmo/dequeísmo, mengganti gerundio yang salah, menajamkan verba dari perífrasis (llevar a cabo → realizar), dan memeriksa aksen — dari draf ke naskah akhir', context: 'merevisi esai sebelum dikirim' },
+]
+
+const C2: CurriculumEntry[] = [
+  { level: 'C2', strand: 'tatabahasa', title: 'Sintaksis Kompleks', focus: 'Subordinasi berlapis, hiperbaton, elipsis, dan konstruksi absolut · kalimat panjang yang tetap terbaca karena strukturnya, bukan karena tanda bacanya', context: 'membaca dan menulis prosa tingkat tinggi' },
+  { level: 'C2', strand: 'tatabahasa', title: 'Kala sebagai Alat Retorika', focus: 'Presente histórico (Colón llega en 1492), futuro de conjetura, condicional de rumor (el ministro habría dimitido — dipakai pers untuk berita belum terkonfirmasi), imperfecto de fantasía dalam permainan anak', context: 'membaca pers dan sastra Spanyol' },
+  { level: 'C2', strand: 'tatabahasa', title: 'Fraseologi dan Idiom', focus: 'Modismos yang tidak bisa diterjemahkan kata per kata: no tener pelos en la lengua, estar en las nubes, ser pan comido, meter la pata, tomar el pelo, dar en el clavo, echar leña al fuego', context: 'memahami percakapan dan tulisan populer' },
+  { level: 'C2', strand: 'tatabahasa', title: 'Peribahasa', focus: 'Refranes: más vale tarde que nunca, en casa del herrero cuchillo de palo, a caballo regalado no le mires el diente, no hay mal que por bien no venga, quien mucho abarca poco aprieta', context: 'memahami tuturan dan tulisan sehari-hari' },
+  { level: 'C2', strand: 'tatabahasa', title: 'Bahasa Hukum dan Administrasi', focus: 'Futuro de subjuntivo yang bertahan, gerundio administratif, nominalisasi berlapis, frasa tetap (a los efectos de, sin perjuicio de, en su caso, por la presente) dan kalimat bersyarat berlapis', context: 'membaca kontrak dan dokumen resmi' },
+  { level: 'C2', strand: 'tatabahasa', title: 'Bahasa Pers dan Judul Berita', focus: 'Judul tanpa verba atau tanpa artikel, presente untuk kejadian lampau, condicional de rumor, eufemisme jurnalistik, dan istilah yang berulang di berita politik dan ekonomi', context: 'membaca surat kabar Spanyol dan Amerika Latin' },
+  { level: 'C2', strand: 'tatabahasa', title: 'Ironi, Pelunakan, dan Nada', focus: 'Litotes (no está mal), understatement, ironi lewat kala dan urutan kata, ¡vaya! dan partikel nada yang membawa sikap — makna yang tidak ada di kata-katanya', context: 'membaca kolom opini dan sastra' },
+  { level: 'C2', strand: 'tatabahasa', title: 'Kesalahan Baku yang Bertahan', focus: 'Kesalahan yang bahkan penutur asli lakukan dan yang paling sering ditandai penyunting: dequeísmo, queísmo, gerundio de posterioridad, concordancia con "la mayoría", mal uso de "detrás mío", laísmo, y "y" vs "e" · plus norma RAE terbaru soal aksen (solo, guion)', context: 'menyunting tulisan orang lain' },
+]
+
+export const ES_GRAMMAR: CurriculumEntry[] = [...A1, ...A2, ...B1, ...B2, ...C1, ...C2]

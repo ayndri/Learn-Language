@@ -328,6 +328,235 @@ export const ITEM_REGISTRY: Record<ItemType, ItemTypeDef | null> = {
     aiHint: '',
   },
 
+  /* ---------------------------------------------------------------- sound */
+  //
+  // Jenis tersendiri, dan alasannya adalah kesalahan yang sempat dibuat:
+  // pelajaran bunyi bahasa Inggris awalnya memakai `script`, yang penilaiannya
+  // MENGETIK romanisasi. Untuk kana itu benar (き → "ki") dan untuk hangul juga
+  // (가 → "ga"), tapi bahasa Inggris tidak punya romanisasi baku — lambangnya
+  // ITU SENDIRI yang IPA. Peserta jadi diminta mengetik /iː/ dari papan ketik
+  // biasa: mustahil, dan tiap jawaban benar dihitung salah.
+  //
+  // Pelafalan memang tidak bisa dinilai otomatis lewat teks. Jadi jenis ini
+  // dinilai sendiri: lihat lambangnya, ucapkan, buka jawabannya, nilai jujur.
+  sound: {
+    label: 'Bunyi',
+    instruction: 'Bunyinya bagaimana? Ucapkan, lalu cek.',
+    grading: 'self',
+    perLesson: 8,
+    schema: () =>
+      z.object({
+        symbol: z.string().min(1).describe('Lambang bunyinya, mis. /æ/ atau /ʃ/'),
+        description_id: z
+          .string()
+          .min(1)
+          .describe('Cara mengucapkannya, dijelaskan untuk penutur bahasa Indonesia'),
+        examples: z
+          .array(z.string().min(1))
+          .min(2)
+          .max(4)
+          .describe('Kata yang memakai bunyi ini, ditulis biasa (bukan IPA)'),
+        contrast: z
+          .string()
+          .describe('Pasangan minimal yang membedakannya, mis. "ship vs sheep". Boleh kosong.')
+          .optional(),
+        mistake_id: z
+          .string()
+          .min(1)
+          .describe('Kesalahan khas penutur Indonesia pada bunyi ini'),
+      }),
+    dedupKey: (f) => key('sound', String(f.symbol ?? '')),
+    tags: () => ['skill:pronunciation'],
+    aiHint:
+      'Satu entri = satu bunyi. Jelaskan posisi lidah dan bibir dengan kalimat sederhana, ' +
+      'bukan istilah fonetik. Sebutkan bunyi bahasa Indonesia yang PALING MIRIP sebagai jangkar, ' +
+      'lalu apa bedanya. Contoh katanya harus kata yang benar-benar umum.',
+  },
+
+  /* ----------------------------------------------------------------- quiz */
+  //
+  // Soal pilihan ganda apa adanya, dipakai HANYA untuk menyelamatkan soal
+  // simulasi yang salah tapi tidak punya padanan latihan yang lebih baik.
+  //
+  // Aturannya di lib/exam/to-items.ts: kalau sebuah soal bisa diubah jadi
+  // latihan PRODUKSI (mengetik jawaban), itu selalu menang — mengetik jauh
+  // lebih melatih daripada memilih. `quiz` adalah jaring terakhir supaya soal
+  // seperti 用法 atau 概要理解 tidak hilang begitu saja setelah simulasi.
+  quiz: {
+    label: 'Soal ulang',
+    instruction: 'Pilih jawaban yang benar',
+    grading: 'choice',
+    perLesson: 0,
+    derived: true,
+    schema: () =>
+      z.object({
+        question: z.string().min(1),
+        // Dua sampai empat: soal 発話表現 dan 即時応答 di JLPT memang hanya
+        // punya tiga pilihan, bukan empat.
+        options: z.array(z.string().min(1)).min(2).max(4),
+        answer_index: z.number().int().min(0).max(3),
+        explanation_id: z.string().min(1),
+        passage: z.string().describe('Bacaan atau naskah pendukung, kalau ada').optional(),
+      }),
+    dedupKey: (f) => key('quiz', String(f.question ?? '')),
+    tags: () => ['from:exam'],
+    aiHint: '',
+  },
+
+  /* ---------------------------------------------------------------- kanji */
+  //
+  // Jenis tersendiri, bukan `script` dan bukan `vocab`.
+  //
+  // `script` tidak bisa dipakai karena penilaiannya mencocokkan SATU bunyi —
+  // sementara satu kanji punya beberapa bacaan (生 saja punya せい・しょう・
+  // い・う・なま dan masih ada lagi). Mengetik satu di antaranya lalu dinilai
+  // salah adalah cara tercepat membuat orang berhenti belajar kanji.
+  //
+  // `vocab` juga tidak cocok: yang dihafal bukan satu kata, tapi karakternya
+  // beserta arti dan kedua jenis bacaannya sekaligus.
+  kanji: {
+    label: 'Kanji',
+    instruction: 'Apa arti dan bacaannya?',
+    grading: 'self',
+    perLesson: 12,
+    schema: () =>
+      z.object({
+        kanji: z.string().min(1).describe('SATU karakter kanji'),
+        meaning_id: z.string().min(1).describe('Arti pokoknya dalam bahasa Indonesia'),
+        onyomi: z
+          .string()
+          .describe('音読み dalam katakana, dipisah koma. Kosongkan kalau memang tidak ada.'),
+        kunyomi: z
+          .string()
+          .describe('訓読み dalam hiragana, dipisah koma. Kosongkan kalau memang tidak ada.'),
+        strokes: z.number().int().min(1).max(30).describe('Jumlah goresan'),
+        example_on: z
+          .string()
+          .min(1)
+          .describe('Satu kata yang memakai bacaan 音読み, ditulis dengan kanji'),
+        example_on_reading: z.string().min(1).describe('Bacaan kata itu dalam hiragana'),
+        example_on_meaning_id: z.string().min(1).describe('Arti kata itu dalam bahasa Indonesia'),
+        example_kun: z
+          .string()
+          .min(1)
+          .describe('Satu kata yang memakai bacaan 訓読み (atau kata umum lain kalau tidak ada)'),
+        example_kun_reading: z.string().min(1).describe('Bacaan kata itu dalam hiragana'),
+        example_kun_meaning_id: z.string().min(1).describe('Arti kata itu dalam bahasa Indonesia'),
+      }),
+    check: (f) => {
+      const problems: string[] = []
+      const k = String(f.kanji ?? '')
+      // Satu kartu = satu karakter. Kalau AI mengirim 日本 sebagai "kanji",
+      // kartunya berubah jadi kartu kosakata dan daftar cakupan jadi bohong.
+      if ([...k].length !== 1) problems.push(`"${k}" bukan satu karakter kanji`)
+      if (!/\p{Script=Han}/u.test(k)) problems.push(`"${k}" bukan huruf kanji`)
+      for (const key of ['example_on', 'example_kun'] as const) {
+        const w = String(f[key] ?? '')
+        if (w && !w.includes(k)) problems.push(`${key} "${w}" tidak memakai kanji ${k}`)
+      }
+      return problems
+    },
+    dedupKey: (f) => key('kanji', String(f.kanji ?? '')),
+    tags: () => ['skill:kanji'],
+    aiHint:
+      'Satu entri = SATU karakter kanji. Bacaan 音読み ditulis katakana, 訓読み ditulis hiragana, ' +
+      'persis seperti di kamus. Kalau sebuah kanji punya banyak bacaan, ambil yang paling sering ' +
+      'dipakai saja — dua sampai tiga, jangan semuanya. Kata contoh harus benar-benar memakai ' +
+      'kanji itu dan merupakan kata yang lazim, bukan istilah langka.',
+  },
+
+  /* ---------------------------------------------------------------- hanzi */
+  //
+  // Jenis tersendiri, dan BUKAN dipakaikan ulang dari `kanji` — walaupun
+  // keduanya melatih karakter Han dan sempat terasa seperti jenis yang sama.
+  //
+  // Yang membuatnya berbeda bukan bahasanya, tapi ISI KARTUNYA. Kartu kanji
+  // dibangun di sekitar dua jenis bacaan yang harus dibedakan (音読み ditulis
+  // katakana, 訓読み ditulis hiragana), dan itu memang inti belajar kanji.
+  // Karakter Mandarin tidak punya pembagian itu: satu karakter umumnya satu
+  // bacaan, dan yang justru harus ada di kartunya adalah hal-hal yang tidak ada
+  // di kartu kanji —
+  //
+  //   部首 (radikal), karena inilah yang membuat 情/清/请 tidak tertukar;
+  //   bentuk TRADISIONAL, karena 学 ditulis 學 di Taiwan dan Hong Kong dan teks
+  //   yang kamu temui di luar HSK memakai bentuk itu;
+  //   多音字, karakter yang bacaannya berubah menurut artinya (行 xíng/háng,
+  //   重 zhòng/chóng) — dan salah membacanya berarti salah kata.
+  //
+  // Memaksakan keduanya jadi satu jenis berarti kartu Mandarin punya kolom
+  // 音読み yang selalu kosong, dan kartu Jepang punya kolom 部首 yang tidak
+  // pernah diisi. Dua jenis dengan field yang jujur lebih murah daripada satu
+  // jenis dengan setengah field bohong.
+  hanzi: {
+    label: 'Hanzi',
+    instruction: 'Apa arti dan cara bacanya?',
+    grading: 'self',
+    perLesson: 12,
+    schema: () =>
+      z.object({
+        hanzi: z.string().min(1).describe('SATU karakter Han, bentuk sederhana (简体)'),
+        pinyin: z
+          .string()
+          .min(1)
+          .describe(
+            'Pinyin dengan TANDA NADA (nǐ, bukan ni3). Kalau karakternya 多音字, tulis ' +
+              'bacaan yang paling sering dipakai lebih dulu, dipisah koma.',
+          ),
+        meaning_id: z.string().min(1).describe('Arti pokoknya dalam bahasa Indonesia'),
+        radical: z
+          .string()
+          .min(1)
+          .describe('部首 (radikalnya), ditulis sebagai karakter, mis. 氵 atau 讠'),
+        strokes: z.number().int().min(1).max(30).describe('Jumlah goresan'),
+        traditional: z
+          .string()
+          .describe('Bentuk tradisional (繁体) kalau BERBEDA. Kosongkan kalau sama.')
+          .optional(),
+        example: z.string().min(1).describe('Satu kata lazim yang memakai karakter ini'),
+        example_pinyin: z.string().min(1).describe('Pinyin kata itu, dengan tanda nada'),
+        example_meaning_id: z.string().min(1).describe('Arti kata itu dalam bahasa Indonesia'),
+        example2: z.string().min(1).describe('Satu kata lazim LAIN yang memakai karakter ini'),
+        example2_pinyin: z.string().min(1).describe('Pinyin kata itu, dengan tanda nada'),
+        example2_meaning_id: z.string().min(1).describe('Arti kata itu dalam bahasa Indonesia'),
+      }),
+    check: (f) => {
+      const problems: string[] = []
+      const c = String(f.hanzi ?? '')
+      // Satu kartu = satu karakter. Kalau AI mengirim 电话 sebagai "hanzi",
+      // kartunya berubah jadi kartu kosakata dan daftar cakupan jadi bohong.
+      if ([...c].length !== 1) problems.push(`"${c}" bukan satu karakter`)
+      if (!/\p{Script=Han}/u.test(c)) problems.push(`"${c}" bukan karakter Han`)
+      // Pinyin bernomor (hao3, zhong1) adalah keluaran yang paling sering
+      // datang dan paling tidak berguna: yang harus dihafal bentuk BERTANDA,
+      // karena itu yang tertulis di kamus dan di soal.
+      if (/\d/.test(String(f.pinyin ?? ''))) {
+        problems.push(`pinyin "${String(f.pinyin)}" memakai angka, bukan tanda nada`)
+      }
+      for (const key of ['example', 'example2'] as const) {
+        const w = String(f[key] ?? '')
+        if (w && !w.includes(c)) problems.push(`${key} "${w}" tidak memakai karakter ${c}`)
+      }
+      // Dua contoh yang sama membuat separuh kartunya tidak mengajarkan apa pun.
+      if (
+        f.example &&
+        f.example2 &&
+        normalizeAnswer(String(f.example)) === normalizeAnswer(String(f.example2))
+      ) {
+        problems.push('kedua kata contoh sama')
+      }
+      return problems
+    },
+    dedupKey: (f) => key('hanzi', String(f.hanzi ?? '')),
+    tags: () => ['skill:hanzi'],
+    aiHint:
+      'Satu entri = SATU karakter Han bentuk sederhana. Pinyin WAJIB memakai tanda nada ' +
+      '(zhōng, bukan zhong1 atau zhong). Sebutkan 部首-nya sebagai karakter, bukan namanya. ' +
+      'Isi `traditional` HANYA kalau bentuk tradisionalnya berbeda — kalau sama, kosongkan. ' +
+      'Untuk 多音字 (行 xíng/háng, 重 zhòng/chóng), tulis bacaan tersering lebih dulu dan ' +
+      'pilih kata contoh yang memperlihatkan bacaan yang berbeda itu. Kata contoh harus kata ' +
+      'yang benar-benar lazim dan benar-benar memakai karakter itu, bukan istilah langka.',
+  },
+
   /* --------------------------------------------------------------- script */
   script: {
     label: 'Cara baca',

@@ -17,7 +17,8 @@ export function UnitForm({ options }: { options: LanguageOption[] }) {
   const [languageId, setLanguageId] = useState(options[0]?.id ?? '')
   const [level, setLevel] = useState('')
 
-  // Level ikut bahasa: CEFR untuk Inggris/Spanyol, JLPT untuk Jepang, TOPIK untuk Korea.
+  // Level ikut bahasa: CEFR untuk Inggris/Spanyol, JLPT untuk Jepang, 급 untuk
+  // Korea, HSK untuk Mandarin.
   // Daftarnya datang dari field template di DB, tidak dihardcode di sini.
   const levels = options.find((o) => o.id === languageId)?.levels ?? []
   const activeLevel = levels.includes(level) ? level : (levels[0] ?? '')

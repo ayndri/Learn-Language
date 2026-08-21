@@ -12,13 +12,34 @@
  * AI tetap dipakai — tapi untuk mengisi MATERI dan LATIHAN tiap pelajaran, bukan
  * untuk memutuskan apa yang perlu dipelajari.
  *
- * Bahasa yang belum punya kurikulum di sini (Jepang, Korea, Spanyol) otomatis
- * jatuh ke silabus buatan AI. Lihat `lib/study/syllabus.ts`.
+ * Bahasa yang belum punya kurikulum di sini otomatis jatuh ke silabus buatan AI
+ * (lihat `lib/study/syllabus.ts`) — jalur itu tetap ada, tapi sekarang tidak
+ * dipakai bahasa mana pun yang aktif.
+ *
+ * Kurikulum Jepang ada di file terpisah (`lib/languages/ja/grammar.ts`) karena
+ * panjangnya 128 pelajaran — menaruhnya di sini membuat file ini tidak bisa
+ * dibaca sebagai daftar lagi. Kana, kanji, dan kosakata Jepang punya daftarnya
+ * sendiri di folder yang sama, dan dirangkai jadi silabus oleh
+ * `lib/languages/tracks.ts`.
+ *
+ * Alasan yang sama berlaku untuk Korea (`lib/languages/ko/`), Mandarin
+ * (`lib/languages/zh/`), dan Spanyol (`lib/languages/es/`): satu folder per
+ * bahasa, satu file per jenis bahan.
  */
+
+import { ES_GRAMMAR } from '@/lib/languages/es/grammar'
+import { JA_GRAMMAR } from '@/lib/languages/ja/grammar'
+import { KO_GRAMMAR } from '@/lib/languages/ko/grammar'
+import { ZH_GRAMMAR } from '@/lib/languages/zh/grammar'
 
 export type CurriculumEntry = {
   level: string
   title: string
+  /**
+   * Bagian materi tempat pelajaran ini muncul di dashboard (lihat
+   * `lib/languages/strands.ts`). Kosong = masuk bagian tata bahasa.
+   */
+  strand?: string
   /** pola grammar yang dilatih — masuk ke prompt materi & item */
   focus: string
   /** situasi nyata tempat pola ini dipakai, supaya contohnya tidak kering */
@@ -28,7 +49,7 @@ export type CurriculumEntry = {
 }
 
 // ---------------------------------------------------------------------------
-// INGGRIS — cakupan grammar setara persiapan TOEFL, 60 pelajaran.
+// INGGRIS — dari nol sampai mahir, A1 → C2. 84 pelajaran grammar.
 // ---------------------------------------------------------------------------
 
 const EN: CurriculumEntry[] = [
@@ -98,13 +119,45 @@ const EN: CurriculumEntry[] = [
   { level: 'B2', title: 'Struktur Sejajar', focus: 'Parallel structure pada daftar dan perbandingan — pola yang sering diuji dalam soal melengkapi kalimat', context: 'memperbaiki kalimat yang tidak sejajar' },
   { level: 'B2', title: 'Membentuk Kata', focus: 'Word formation: prefix dan suffix untuk mengubah kelas kata (able→ability, decide→decision, care→careless)', context: 'memperluas kosakata secara sistematis' },
 
-  // ---------------------------------------------------------------- C1 (2)
+  // ---------------------------------------------------------------- B2 tambahan (6)
+  { level: 'B2', title: 'Modal untuk Masa Lalu', focus: 'must have/might have/could have/should have/needn’t have + past participle — menduga dan menyesali kejadian lampau', context: 'membahas apa yang mungkin terjadi kemarin' },
+  { level: 'B2', title: 'Future Perfect dan Continuous', focus: 'will have done, will be doing, dan be about to — menempatkan kejadian pada titik waktu di masa depan', context: 'membicarakan rencana jangka panjang' },
+  { level: 'B2', title: 'Pasif Tingkat Lanjut', focus: 'Passive dengan modal (must be done), passive infinitive/gerund (to be told, being asked), dan It is said that… / He is said to…', context: 'menulis berita dan laporan objektif' },
+  { level: 'B2', title: 'Relative Clause Lanjutan', focus: 'Preposisi + relative pronoun (the person to whom…), reduced relative clause (the man standing there), dan which merujuk seluruh klausa', context: 'menulis kalimat panjang yang tetap jelas' },
+  { level: 'B2', title: 'Kalimat Bersyarat Campuran', focus: 'Mixed conditionals (If I had studied…, I would be…), serta provided that, as long as, in case, otherwise', context: 'membicarakan akibat sekarang dari keputusan lampau' },
+  { level: 'B2', title: 'Emphasis dan Fronting', focus: 'do/does/did untuk penegasan, fronting (Never before had we…), dan what-cleft (What I need is…)', context: 'menekankan bagian tertentu dari kalimat' },
+
+  // ---------------------------------------------------------------- C1 (12)
   { level: 'C1', title: 'Inversi dan Penekanan', focus: 'Inversion setelah negative adverbial (Never have I…, Not only…) dan cleft sentence (It was… that…)', context: 'menulis dengan gaya formal yang kuat' },
   { level: 'C1', title: 'Subjunctive dan Formal', focus: 'Subjunctive setelah suggest/insist/recommend that, serta struktur formal seperti were to dan should you', context: 'menulis surat dan proposal resmi' },
+  { level: 'C1', title: 'Nominalisasi', focus: 'Mengubah klausa jadi frasa benda (they decided quickly → their quick decision) — ciri utama tulisan akademik', context: 'memadatkan tulisan ilmiah' },
+  { level: 'C1', title: 'Hedging dan Kepastian', focus: 'Bahasa berhati-hati: appear/seem/tend to, may well, arguably, it is likely that — dan kenapa klaim mutlak melemahkan tulisan akademik', context: 'menulis argumen yang bisa dipertahankan' },
+  { level: 'C1', title: 'Penanda Wacana', focus: 'Discourse markers dan posisinya: nevertheless, conversely, that said, admittedly, by the same token, in other words', context: 'menjaga alur paragraf panjang' },
+  { level: 'C1', title: 'Ellipsis dan Substitusi', focus: 'Menghilangkan yang sudah jelas (I would if I could), so/neither do I, one/ones, do so — supaya tidak mengulang', context: 'menulis dan berbicara tanpa pengulangan kaku' },
+  { level: 'C1', title: 'Participle dan Absolute Clause', focus: 'Having finished the report, she left; The weather being fine, we walked — klausa tanpa subjek dan konstruksi absolut', context: 'gaya tulis formal yang padat' },
+  { level: 'C1', title: 'Kata Kerja Berpola Rumit', focus: 'Verb + object + infinitive/gerund, verb + preposition + gerund, dan pola yang berubah makna (regret to say vs regret saying)', context: 'menyampaikan nuansa yang halus' },
+  { level: 'C1', title: 'Modalitas Halus', focus: 'would/used to untuk kebiasaan lampau, shall/ought to/had better, dan modal dalam register formal', context: 'menyesuaikan derajat kewajiban dan saran' },
+  { level: 'C1', title: 'Artikel pada Rujukan Abstrak', focus: 'Zero article vs the pada kata benda abstrak dan generik (Education matters vs The education he received) — kesalahan tersering penulis non-natif', context: 'menulis paragraf akademik yang presisi' },
+  { level: 'C1', title: 'Kalimat Panjang yang Tetap Jelas', focus: 'Menggabungkan subordinasi, koordinasi, dan tanda baca (semicolon, colon, dash) tanpa membuat kalimat berlari', context: 'menulis esai dan laporan panjang' },
+  { level: 'C1', title: 'Kolokasi dan Kealamian', focus: 'Kombinasi kata yang benar secara tata bahasa tapi tidak dipakai penutur asli (make a research → do research); pola verb+noun yang lazim', context: 'menulis yang terdengar alami, bukan sekadar benar' },
+
+  // ---------------------------------------------------------------- C2 (8)
+  { level: 'C2', title: 'Register dan Nada', focus: 'Memilih laras: akademik, jurnalistik, hukum, percakapan — beserta penanda gramatikal tiap laras (passive, nominalisasi, kontraksi)', context: 'menulis untuk pembaca yang berbeda' },
+  { level: 'C2', title: 'Ironi dan Understatement', focus: 'Litotes (not unlike), understatement (a slight problem), dan struktur yang membawa nada — makna yang tidak ada di kata-katanya', context: 'membaca kolom opini dan sastra Inggris' },
+  { level: 'C2', title: 'Struktur Argumen Kompleks', focus: 'Konsesi bertingkat (While it is true that…, it does not follow that…), premis tersembunyi, dan penanda kesimpulan', context: 'menulis esai argumentatif tingkat lanjut' },
+  { level: 'C2', title: 'Idiom dan Metafora Konseptual', focus: 'Idiom yang tidak bisa diterjemahkan kata per kata, metafora yang mengakar (argument is war, time is money), dan bahayanya mencampur metafora', context: 'menulis yang hidup tanpa terdengar klise' },
+  { level: 'C2', title: 'Ragam Bahasa Inggris', focus: 'Perbedaan British/American/Australian dalam ejaan, kosakata, dan tata bahasa (have got, past simple vs present perfect), serta konsistensi dalam satu tulisan', context: 'menulis untuk penerbit atau institusi tertentu' },
+  { level: 'C2', title: 'Bahasa Hukum dan Kontrak', focus: 'Shall untuk kewajiban, herein/thereof/notwithstanding, definisi berkurung, dan kalimat bersyarat berlapis', context: 'membaca kontrak dan dokumen resmi' },
+  { level: 'C2', title: 'Menyunting Tulisan Sendiri', focus: 'Memangkas redundansi, mengubah pasif yang tidak perlu, memperbaiki paralelisme, dan menajamkan kata kerja — dari draf ke naskah akhir', context: 'merevisi esai atau artikel sebelum dikirim' },
+  { level: 'C2', title: 'Prosodi dan Ritme Tulisan', focus: 'Panjang kalimat yang bervariasi, penempatan informasi baru di akhir (end-weight), dan alur tema-rema', context: 'menulis yang enak dibaca, bukan cuma benar' },
 ]
 
 export const CURRICULA: Record<string, CurriculumEntry[]> = {
   en: EN,
+  ja: JA_GRAMMAR,
+  ko: KO_GRAMMAR,
+  zh: ZH_GRAMMAR,
+  es: ES_GRAMMAR,
 }
 
 export function curriculumFor(languageCode: string): CurriculumEntry[] | null {

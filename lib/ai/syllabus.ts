@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ai } from '@/lib/ai/provider'
+import type { ItemType } from '@/lib/items/types'
 
 /**
  * Susun silabus: daftar pelajaran berurutan dari mudah ke sulit.
@@ -51,11 +52,24 @@ const syllabusSchema = z.object({
 /**
  * Satu pelajaran dalam silabus.
  *
- * `words` hanya terisi untuk pelajaran kosakata dari kurikulum tetap — silabus
- * buatan AI tidak pernah menghasilkannya.
+ * Tiga field terakhir hanya terisi untuk pelajaran dari kurikulum tetap —
+ * silabus buatan AI tidak pernah menghasilkannya.
+ *
+ * `words`         daftar yang WAJIB tercakup (kosakata AWL, kanji, kana)
+ * `wordListType`  jenis item yang dikendalikan daftar itu; tanpa ini, daftar
+ *                 kanji akan ikut dipakai generator kosakata dan sebaliknya
+ * `itemTypes`     jenis latihan yang dibuat untuk pelajaran ini. Kalau kosong,
+ *                 dipakai semua jenis yang berlaku untuk bahasanya. Pelajaran
+ *                 kana tidak butuh soal bacaan, pelajaran grammar tidak butuh
+ *                 kartu kana — dan tiap jenis yang tidak perlu itu satu
+ *                 panggilan AI yang terbuang.
  */
 export type SyllabusLesson = z.infer<typeof syllabusSchema>['lessons'][number] & {
   words?: string[]
+  wordListType?: ItemType
+  itemTypes?: ItemType[]
+  /** bagian materi tempat pelajaran ini muncul — lihat `lib/languages/strands.ts` */
+  strand?: string
 }
 
 export type SyllabusRequest = {

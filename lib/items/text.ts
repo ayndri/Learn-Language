@@ -7,8 +7,25 @@
  */
 export function normalizeAnswer(input: string, opts: { stripAccents?: boolean } = {}): string {
   let s = input.trim().toLowerCase().replace(/\s+/g, ' ')
+
+  // Angka & huruf lebar (１２３, ＡＢＣ) disamakan dengan yang biasa. Papan
+  // ketik Jepang menghasilkannya tanpa diminta, dan "1000円" vs "１０００円"
+  // itu jawaban yang sama — bukan salah.
+  //
+  // NFKC TIDAK menyentuh kana: ハ dan ﾊ memang disatukan (itu benar), tapi
+  // hiragana dan katakana tetap dibedakan. Memang harus begitu.
+  s = s.normalize('NFKC')
+
   // buang tanda baca di ujung saja — tanda baca di tengah (apostrof: don't) itu bermakna
-  s = s.replace(/^[.,!?;:"'¡¿]+|[.,!?;:"']+$/g, '')
+  s = s.replace(/^[.,!?;:"'¡¿。、！？「」『』（）]+|[.,!?;:"'。、！？「」『』（）]+$/g, '')
+
+  // Tulisan Jepang & Korea tidak memakai spasi antarkata; buku pelajaran N5
+  // memakainya, penutur asli tidak, dan keduanya sama benarnya. Membandingkan
+  // spasi di situ hanya menghukum jawaban yang benar.
+  if (/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(s)) {
+    s = s.replace(/\s+/g, '')
+  }
+
   if (opts.stripAccents) {
     s = s.normalize('NFD').replace(/\p{Diacritic}/gu, '')
   }

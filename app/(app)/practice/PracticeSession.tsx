@@ -336,7 +336,7 @@ function Card(c: CardProps) {
 
 // --------------------------------------------------------------------- muka
 
-/** Sisi depan untuk vocab / phrase / cloze / sentence / script */
+/** Sisi depan untuk vocab / phrase / cloze / sentence / script / kanji / hanzi */
 function StandardPrompt(c: CardProps) {
   const { item, props, result } = c
   const f = item.fields
@@ -370,23 +370,49 @@ function StandardPrompt(c: CardProps) {
         ? String(f.phrase ?? '—')
         : item.type === 'sentence' || item.type === 'speaking'
           ? String(f.source_id ?? '—')
-          : String(f.glyph ?? '—')
+          : item.type === 'kanji'
+            ? String(f.kanji ?? '—')
+            : item.type === 'sound'
+              ? String(f.symbol ?? '—')
+              : String(f.glyph ?? '—')
 
   // Kalimat sumber untuk terjemahan & ucapan ditulis dalam bahasa Indonesia —
   // jangan pakai font/TTS bahasa target untuk itu.
-  const isTargetLanguage = item.type !== 'sentence' && item.type !== 'speaking'
+  const isTargetLanguage =
+    item.type !== 'sentence' && item.type !== 'speaking' && item.type !== 'sound'
+  // Kanji sendirian tidak punya satu bunyi yang benar — TTS akan memilih salah
+  // satu bacaannya secara sewenang-wenang, dan itu justru membocorkan jawaban
+  // yang belum tentu benar. Yang dibacakan kata contohnya di sisi belakang.
+  // Lambang IPA bukan kata: TTS akan membacanya sebagai karakter acak, dan
+  // font bahasa target juga tidak berlaku untuknya.
+  //
+  // Kartu hanzi ikut dibisukan, tapi alasannya BEDA dan lebih halus: satu
+  // karakter Mandarin biasanya punya satu bacaan, jadi TTS-nya justru akan
+  // benar — dan itu masalahnya. Yang ditanyakan kartu ini arti DAN cara
+  // bacanya; tombol yang membacakan jawabannya sebelum kamu menebak membuat
+  // kartunya tidak melatih apa pun.
+  const canSpeak =
+    isTargetLanguage &&
+    item.type !== 'kanji' &&
+    item.type !== 'hanzi' &&
+    item.type !== 'sound'
 
   return (
     <div className="flex min-h-36 flex-col items-center justify-center gap-2 px-6 py-9">
       <div className="flex items-center gap-1.5">
         <p
           className={`text-center font-semibold tracking-tight ${
-            item.type === 'script' ? 'text-5xl' : 'text-2xl'
+            item.type === 'script' ||
+            item.type === 'kanji' ||
+            item.type === 'hanzi' ||
+            item.type === 'sound'
+              ? 'text-5xl'
+              : 'text-2xl'
           } ${isTargetLanguage ? `script-${script}` : ''}`}
         >
           {big}
         </p>
-        {isTargetLanguage && <SpeakButton text={big} lang={props.ttsLang} />}
+        {canSpeak && <SpeakButton text={big} lang={props.ttsLang} />}
       </div>
       {(item.type === 'sentence' || item.type === 'speaking') && (
         <p className="text-xs text-faint">
@@ -514,6 +540,71 @@ function backRows(item: PracticeItem, props: SessionProps): Row[] {
         { label: 'Bunyi', value: String(f.sound ?? '') },
         { label: 'Contoh', value: String(f.example ?? ''), speakable: true },
         { label: 'Arti contoh', value: String(f.example_meaning_id ?? '') },
+      ].filter((r) => r.value)
+    case 'sound':
+      return [
+        { label: 'Cara ucap', value: String(f.description_id ?? '') },
+        {
+          label: 'Contoh',
+          value: Array.isArray(f.examples) ? (f.examples as string[]).join(' · ') : '',
+          speakable: true,
+        },
+        { label: 'Bandingkan', value: String(f.contrast ?? ''), speakable: true },
+        { label: 'Sering keliru', value: String(f.mistake_id ?? '') },
+      ].filter((r) => r.value)
+    case 'kanji':
+      // Bacaan TIDAK ditandai speakable: 音読み berdiri sendiri seperti "セイ"
+      // tidak punya bunyi yang wajar diucapkan lepas dari katanya. Yang
+      // dibacakan kata contohnya.
+      return [
+        { label: 'Arti', value: String(f.meaning_id ?? '') },
+        { label: '音読み', value: String(f.onyomi ?? '') },
+        { label: '訓読み', value: String(f.kunyomi ?? '') },
+        { label: 'Goresan', value: f.strokes ? `${f.strokes} goresan` : '' },
+        {
+          label: 'Contoh 音',
+          value: [f.example_on, f.example_on_reading && `(${f.example_on_reading})`, f.example_on_meaning_id && `— ${f.example_on_meaning_id}`]
+            .filter(Boolean)
+            .join(' '),
+          speakable: true,
+        },
+        {
+          label: 'Contoh 訓',
+          value: [f.example_kun, f.example_kun_reading && `(${f.example_kun_reading})`, f.example_kun_meaning_id && `— ${f.example_kun_meaning_id}`]
+            .filter(Boolean)
+            .join(' '),
+          speakable: true,
+        },
+      ].filter((r) => r.value)
+    case 'hanzi':
+      // Pinyin TIDAK ditandai speakable, dan alasannya bukan pedagogis
+      // melainkan teknis: pinyin itu huruf Latin, dan suara zh-CN yang
+      // disuruh membaca "zhōng" akan mengejanya huruf per huruf atau
+      // membacanya sebagai kata asing. Yang dibacakan kata contohnya —
+      // ditulis dengan karakter, jadi suaranya benar.
+      //
+      // Bentuk tradisional juga tidak dibacakan: bunyinya sama dengan bentuk
+      // sederhananya, yang berbeda cuma tulisannya.
+      return [
+        { label: 'Arti', value: String(f.meaning_id ?? '') },
+        { label: 'Pinyin', value: String(f.pinyin ?? '') },
+        { label: '部首', value: String(f.radical ?? '') },
+        { label: 'Goresan', value: f.strokes ? `${f.strokes} goresan` : '' },
+        { label: 'Tradisional', value: String(f.traditional ?? '') },
+        {
+          label: 'Contoh',
+          value: [f.example, f.example_pinyin && `(${f.example_pinyin})`, f.example_meaning_id && `— ${f.example_meaning_id}`]
+            .filter(Boolean)
+            .join(' '),
+          speakable: true,
+        },
+        {
+          label: 'Contoh lain',
+          value: [f.example2, f.example2_pinyin && `(${f.example2_pinyin})`, f.example2_meaning_id && `— ${f.example2_meaning_id}`]
+            .filter(Boolean)
+            .join(' '),
+          speakable: true,
+        },
       ].filter((r) => r.value)
     default:
       return []

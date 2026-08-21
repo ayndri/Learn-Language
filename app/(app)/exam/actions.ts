@@ -4,7 +4,7 @@ import { and, asc, count, eq, max } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireUserId } from '@/auth'
-import { generateExamBlock } from '@/lib/ai/exam'
+import { generateExamBlock, gradeExamWriting } from '@/lib/ai/exam'
 import { db } from '@/lib/db'
 import {
   examAnswers,
@@ -17,8 +17,9 @@ import {
   units,
 } from '@/lib/db/schema'
 import { questionCount, type ExamSize } from '@/lib/exam/blueprint'
+import { EXAM_FORMATS, examFormat } from '@/lib/exam/formats'
 import { examSteps } from '@/lib/exam/plan'
-import { examQuestionToItem, readingQuestionToItem } from '@/lib/exam/to-items'
+import { GROUPED_TYPES, examQuestionToItem, readingQuestionToItem } from '@/lib/exam/to-items'
 import { initialState } from '@/lib/srs/fsrs'
 
 export type ExamActionResult = { ok?: string; error?: string; rejected?: string[] }
@@ -33,18 +34,27 @@ async function loadOwnedExam(examId: string, userId: string) {
 }
 
 /** Bikin paket simulasi baru (masih kosong) lalu buka halamannya. */
-export async function createExamAction(size: ExamSize): Promise<ExamActionResult> {
+export async function createExamAction(kind: string, size: ExamSize): Promise<ExamActionResult> {
   const userId = await requireUserId()
 
-  // Simulasi TOEFL hanya untuk bahasa Inggris — itu satu-satunya yang punya
-  // cetak biru. Bukan pembatasan sementara: TOEFL memang tes bahasa Inggris.
-  const [language] = await db.select().from(languages).where(eq(languages.code, 'en')).limit(1)
-  if (!language) return { error: 'Bahasa Inggris belum diaktifkan.' }
   if (size !== 'full' && size !== 'short') return { error: 'Ukuran tidak dikenal.' }
+  if (!EXAM_FORMATS[kind]) return { error: 'Jenis simulasi tidak dikenal.' }
+  const format = EXAM_FORMATS[kind]
+
+  // Tiap format ujian terikat ke satu bahasa — TOEFL memang tes bahasa Inggris,
+  // JLPT memang tes bahasa Jepang. Yang dicek di sini bahasanya sudah aktif,
+  // bukan kamu sudah punya jalur belajarnya: simulasi boleh dikerjakan
+  // kapan saja sebagai pengukur.
+  const [language] = await db
+    .select()
+    .from(languages)
+    .where(eq(languages.code, format.languageCode))
+    .limit(1)
+  if (!language?.enabled) return { error: `Bahasa untuk ${format.label} belum diaktifkan.` }
 
   const [exam] = await db
     .insert(exams)
-    .values({ userId, languageId: language.id, kind: 'toefl_itp', size, status: 'planned' })
+    .values({ userId, languageId: language.id, kind, size, status: 'planned' })
     .returning({ id: exams.id })
 
   redirect(`/exam/${exam.id}`)
@@ -65,13 +75,13 @@ export async function generateExamStepAction(
   const exam = await loadOwnedExam(examId, userId)
   if (!exam) return { error: 'Simulasi tidak ditemukan.' }
 
-  const steps = examSteps(exam.size)
+  const steps = examSteps(exam.kind, exam.size)
   const step = steps[stepIndex]
   if (!step) return { error: 'Langkah tidak ada.' }
 
   let result
   try {
-    result = await generateExamBlock(step.block, step.groupIndex)
+    result = await generateExamBlock(exam.kind, step.block, step.groupIndex)
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Gagal membuat soal.' }
   }
@@ -98,6 +108,9 @@ export async function generateExamStepAction(
       grammarPoint: q.grammarPoint ?? null,
       options: q.options,
       answerIndex: q.answerIndex,
+      // Bobot diambil dari cetak biru, bukan dari AI: nilai soal itu aturan
+      // ujian, bukan sesuatu yang boleh dikarang saat membuat soalnya.
+      maxScore: step.block.points ?? null,
       explanationId: q.explanationId,
     })
     inserted++
@@ -157,7 +170,7 @@ export async function markExamReadyAction(examId: string): Promise<ExamActionRes
 
   await db.update(exams).set({ status: 'ready' }).where(eq(exams.id, examId))
   revalidatePath(`/exam/${examId}`)
-  return { ok: `Siap: ${n} dari ${questionCount(exam.size)} soal.` }
+  return { ok: `Siap: ${n} dari ${questionCount(exam.kind, exam.size)} soal.` }
 }
 
 export async function startExamAction(examId: string): Promise<ExamActionResult> {
@@ -186,12 +199,13 @@ export async function answerExamAction(
   if (exam.status === 'done') return { error: 'Simulasi sudah selesai.' }
 
   const [q] = await db
-    .select({ answerIndex: examQuestions.answerIndex })
+    .select({ answerIndex: examQuestions.answerIndex, options: examQuestions.options })
     .from(examQuestions)
     .where(and(eq(examQuestions.id, questionId), eq(examQuestions.examId, examId)))
     .limit(1)
   if (!q) return { error: 'Soal tidak ditemukan.' }
-  if (chosen < 0 || chosen > 3) return { error: 'Pilihan tidak valid.' }
+  if (q.answerIndex === null) return { error: 'Soal ini dijawab dengan tulisan, bukan pilihan.' }
+  if (chosen < 0 || chosen >= q.options.length) return { error: 'Pilihan tidak valid.' }
 
   // Kebenaran dihitung di server dan disimpan. Klien tidak pernah menerima
   // `answerIndex` selama ujian berjalan — kunci jawaban tidak boleh ada di browser.
@@ -206,6 +220,81 @@ export async function answerExamAction(
     })
 
   return { ok: 'ok' }
+}
+
+/**
+ * Simpan DAN nilai satu jawaban karangan (TOPIK 쓰기).
+ *
+ * Dinilai saat disimpan, bukan menunggu ujian selesai. Dua alasan: menilai empat
+ * karangan sekaligus di akhir butuh empat panggilan AI berturut-turut dalam satu
+ * request — cukup lama untuk kena batas durasi serverless — dan peserta yang
+ * kehabisan waktu di soal terakhir tetap mendapat nilai untuk yang sudah ditulis.
+ *
+ * Idempoten: menyimpan ulang menimpa nilai dan komentar sebelumnya.
+ */
+export async function answerExamWritingAction(
+  examId: string,
+  questionId: string,
+  text: string,
+): Promise<ExamActionResult> {
+  const userId = await requireUserId()
+  const exam = await loadOwnedExam(examId, userId)
+  if (!exam) return { error: 'Simulasi tidak ditemukan.' }
+  if (exam.status === 'done') return { error: 'Simulasi sudah selesai.' }
+
+  const [q] = await db
+    .select({
+      stem: examQuestions.stem,
+      explanationId: examQuestions.explanationId,
+      maxScore: examQuestions.maxScore,
+      answerIndex: examQuestions.answerIndex,
+    })
+    .from(examQuestions)
+    .where(and(eq(examQuestions.id, questionId), eq(examQuestions.examId, examId)))
+    .limit(1)
+  if (!q) return { error: 'Soal tidak ditemukan.' }
+  if (q.answerIndex !== null) return { error: 'Soal ini pilihan ganda, bukan karangan.' }
+
+  const answer = text.trim().slice(0, 4000)
+  const maxScore = q.maxScore ?? 10
+
+  let graded
+  try {
+    graded = await gradeExamWriting(exam.kind, {
+      prompt: q.stem,
+      guidance: q.explanationId,
+      answer,
+      maxScore,
+    })
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Gagal menilai tulisan.' }
+  }
+
+  await db
+    .insert(examAnswers)
+    .values({
+      examId,
+      questionId,
+      textAnswer: answer,
+      score: graded.score,
+      feedbackId: graded.feedback,
+      // `isCorrect` tidak bermakna untuk karangan — nilainya bertingkat, bukan
+      // benar/salah. Diisi true kalau dapat lebih dari separuh, semata supaya
+      // hitungan "berapa yang benar" di halaman hasil tidak kosong.
+      isCorrect: graded.score * 2 >= maxScore,
+    })
+    .onConflictDoUpdate({
+      target: [examAnswers.examId, examAnswers.questionId],
+      set: {
+        textAnswer: answer,
+        score: graded.score,
+        feedbackId: graded.feedback,
+        isCorrect: graded.score * 2 >= maxScore,
+        answeredAt: new Date(),
+      },
+    })
+
+  return { ok: `${graded.score}/${maxScore} — ${graded.feedback}` }
 }
 
 export async function finishExamAction(examId: string): Promise<ExamActionResult> {
@@ -245,16 +334,43 @@ export async function examMistakesToItemsAction(examId: string): Promise<ExamAct
     .orderBy(asc(examQuestions.position))
 
   const answers = await db.select().from(examAnswers).where(eq(examAnswers.examId, examId))
+
+  // "Sudah benar" berbeda artinya untuk karangan: bukan benar/salah, tapi
+  // seberapa tinggi nilainya. Karangan yang dapat 90% ke atas tidak perlu
+  // dilatih ulang; di bawah itu perlu — dan itu ambang yang lebih masuk akal
+  // daripada `is_correct` yang cuma menandai "lebih dari separuh".
+  const byId = new Map(answers.map((a) => [a.questionId, a]))
   const correctIds = new Set(answers.filter((a) => a.isCorrect).map((a) => a.questionId))
 
   const groups = await db.select().from(examGroups).where(eq(examGroups.examId, examId))
   const passageOf = new Map(groups.map((g) => [g.id, g.body]))
 
-  const wrong = questions.filter((q) => !correctIds.has(q.id))
+  const wrong = questions.filter((q) => {
+    if (q.answerIndex === null) {
+      const a = byId.get(q.id)
+      const max = q.maxScore ?? 10
+      return !a?.score || a.score < max * 0.9
+    }
+    return !correctIds.has(q.id)
+  })
   if (wrong.length === 0) return { ok: 'Tidak ada yang salah — tidak ada yang perlu dilatih.' }
 
   // Semua item hasil konversi dikumpulkan dalam satu unit per simulasi, supaya
   // bisa dilihat sebagai satu kesatuan ("kesalahan simulasi 20 Agustus").
+  const format = examFormat(exam.kind)
+
+  // Level unit hasil koreksi harus level yang BENAR-BENAR ADA di bahasa itu.
+  // Sebelumnya jatuh ke 'B1' untuk format tanpa level (TOEFL, TOPIK) — dan 'B1'
+  // tidak ada di daftar level bahasa Korea, jadi unitnya memakai level hantu
+  // yang tidak cocok dengan warna, urutan, maupun penyaringan mana pun.
+  const [language] = await db
+    .select({ fieldTemplate: languages.fieldTemplate })
+    .from(languages)
+    .where(eq(languages.id, exam.languageId))
+    .limit(1)
+  const levels = language?.fieldTemplate.levels ?? []
+  const fallbackLevel = levels[Math.floor(levels.length / 2)] ?? levels[0] ?? 'B1'
+
   const label = new Intl.DateTimeFormat('id-ID', {
     dateStyle: 'medium',
     timeZone: 'Asia/Jakarta',
@@ -268,10 +384,13 @@ export async function examMistakesToItemsAction(examId: string): Promise<ExamAct
       trackId: null, // di luar jalur belajar utama
       position: 0,
       status: 'ready',
-      title: `Kesalahan simulasi — ${label}`,
-      topic: 'perbaikan dari simulasi TOEFL',
+      title: `Kesalahan simulasi ${format.short} — ${label}`,
+      topic: `perbaikan dari simulasi ${format.label}`,
       focus: 'pola yang masih salah saat simulasi',
-      level: 'B1',
+      // Level unitnya mengikuti level format ujiannya kalau ada (JLPT), atau
+      // level menengah bahasa itu kalau tidak (TOEFL & TOPIK tidak berjenjang
+      // per paket soal).
+      level: format.level ?? fallbackLevel,
       lessonMd: null,
     })
     .returning({ id: units.id })
@@ -280,10 +399,9 @@ export async function examMistakesToItemsAction(examId: string): Promise<ExamAct
   const skipped: string[] = []
 
   for (const q of wrong) {
-    const converted =
-      q.type === 'reading'
-        ? readingQuestionToItem(q, passageOf.get(q.groupId ?? '') ?? '')
-        : examQuestionToItem(q)
+    const converted = GROUPED_TYPES.includes(q.type)
+      ? readingQuestionToItem(q, passageOf.get(q.groupId ?? '') ?? '')
+      : examQuestionToItem(q)
 
     if (!converted) {
       skipped.push(`soal ${q.position + 1} (${q.type})`)

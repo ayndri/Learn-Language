@@ -112,6 +112,32 @@ export const units = pgTable(
      * bergantung pada apa yang kebetulan kepikiran AI.
      */
     wordList: text('word_list').array(),
+    /**
+     * Jenis item yang dikendalikan `wordList`.
+     *
+     * Tanpa ini, daftar kanji pada pelajaran kanji akan ikut dipaksakan ke
+     * generator kosakata — dan kamu dapat sepuluh kartu kosakata berisi satu
+     * karakter kanji. Satu daftar, satu jenis yang memakainya.
+     */
+    wordListType: text('word_list_type').$type<ItemType>(),
+    /**
+     * Jenis latihan yang dibuat untuk unit ini. null = semua jenis yang
+     * berlaku untuk bahasanya.
+     *
+     * Ada karena tidak semua pelajaran butuh semua jenis: pelajaran kana cuma
+     * butuh kartu cara baca, pelajaran kanji cuma butuh kartu kanji. Tiap jenis
+     * yang tidak perlu adalah satu panggilan AI yang terbuang — dan pada
+     * silabus 200-an pelajaran, itu bukan penghematan kecil.
+     */
+    itemPlan: text('item_plan').array().$type<ItemType[]>(),
+    /**
+     * Bagian materi: aksara, kanji, kosakata, imbuhan, tata bahasa, percakapan.
+     *
+     * Dashboard menampilkannya sebagai tab. Disimpan per unit, bukan dihitung
+     * ulang dari judulnya, supaya pelajaran yang kamu buat sendiri lewat `/new`
+     * juga punya tempat yang jelas.
+     */
+    strand: text('strand'),
     lessonMd: text('lesson_md'), // null selama status masih 'planned'
     /** true kalau materi sudah kamu koreksi manual — penanda "sudah diverifikasi" */
     lessonEdited: boolean('lesson_edited').notNull().default(false),
@@ -322,8 +348,21 @@ export const examQuestions = pgTable(
      * dan untuk analisis kelemahan di halaman statistik.
      */
     grammarPoint: text('grammar_point'),
+    /** kosong untuk soal karangan (쓰기) — lihat `maxScore` */
     options: text('options').array().notNull(),
-    answerIndex: smallint('answer_index').notNull(),
+    /**
+     * Kunci jawaban. NULL untuk soal karangan, yang tidak punya satu jawaban
+     * benar dan dinilai AI dengan rubrik.
+     */
+    answerIndex: smallint('answer_index'),
+    /**
+     * Bobot nilai soal ini. NULL = 1 poin, seperti semua soal pilihan ganda.
+     *
+     * Ada karena TOPIK 쓰기 tidak memberi bobot yang sama: soal 51–52 bernilai
+     * 10 poin, 53 bernilai 30, dan 54 bernilai 50. Menganggap semuanya satu
+     * poin membuat esai 700 kata sama berharganya dengan mengisi satu kalimat.
+     */
+    maxScore: smallint('max_score'),
     explanationId: text('explanation_id').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -339,9 +378,15 @@ export const examAnswers = pgTable(
     questionId: uuid('question_id')
       .notNull()
       .references(() => examQuestions.id, { onDelete: 'cascade' }),
-    /** null = dilewati */
+    /** null = dilewati, atau soal ini memang bukan pilihan ganda */
     chosen: smallint('chosen'),
     isCorrect: boolean('is_correct').notNull().default(false),
+    /** jawaban karangan (쓰기) apa adanya */
+    textAnswer: text('text_answer'),
+    /** nilai yang diberikan AI untuk jawaban karangan, 0..maxScore */
+    score: smallint('score'),
+    /** komentar AI dalam bahasa Indonesia — ditampilkan di halaman hasil */
+    feedbackId: text('feedback_id'),
     answeredAt: timestamp('answered_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.examId, t.questionId] })],

@@ -1,93 +1,71 @@
+import {
+  examFormat,
+  type BlueprintBlock,
+  type ExamSection,
+  type ExamSize,
+} from '@/lib/exam/formats'
+
 /**
- * CETAK BIRU TOEFL ITP
+ * Pembacaan cetak biru — tipis di atas `lib/exam/formats.ts`.
  *
- * Struktur aslinya (paper-based / ITP), 140 soal, ±115 menit:
- *
- *   Seksi 1 — Listening Comprehension          50 soal, ±35 menit
- *     Part A  percakapan pendek                30
- *     Part B  percakapan panjang (2 rekaman)    8
- *     Part C  ceramah/talk (3 rekaman)         12
- *
- *   Seksi 2 — Structure & Written Expression   40 soal, 25 menit
- *     Part A  melengkapi kalimat               15
- *     Part B  menemukan bagian yang salah      25
- *
- *   Seksi 3 — Reading Comprehension            50 soal, 55 menit
- *     5 bacaan × 10 soal
- *
- * Ditulis sebagai data supaya jumlahnya bisa diperiksa, bukan dipercaya.
- * Mode `short` untuk latihan cepat — proporsinya sama, jumlahnya sepertiga.
+ * Semua fungsi di sini menerima `kind` (id format) sebagai argumen pertama.
+ * Dulu tidak: seluruh modul ujian mengasumsikan TOEFL ITP, dan asumsi itu ikut
+ * menyebar ke halaman. Sekarang halaman cukup meneruskan `exam.kind` yang
+ * memang sudah tersimpan di database sejak awal.
  */
 
-export type ExamSize = 'full' | 'short'
+export type { BlueprintBlock, ExamSection, ExamSize }
 
-export type BlueprintBlock = {
-  section: 1 | 2 | 3
-  part: 'A' | 'B' | 'C'
-  type:
-    | 'listening_short'
-    | 'listening_long'
-    | 'listening_talk'
-    | 'structure'
-    | 'written_expression'
-    | 'reading'
-  /** jumlah kelompok (bacaan / rekaman panjang). 0 = soal berdiri sendiri */
-  groups: number
-  /** soal per kelompok, atau total soal kalau `groups` = 0 */
-  perGroup: number
-  label: string
+export function blueprint(kind: string, size: ExamSize): BlueprintBlock[] {
+  return examFormat(kind).blocks[size]
 }
 
-const FULL: BlueprintBlock[] = [
-  { section: 1, part: 'A', type: 'listening_short', groups: 0, perGroup: 30, label: 'Percakapan pendek' },
-  { section: 1, part: 'B', type: 'listening_long', groups: 2, perGroup: 4, label: 'Percakapan panjang' },
-  { section: 1, part: 'C', type: 'listening_talk', groups: 3, perGroup: 4, label: 'Ceramah singkat' },
-  { section: 2, part: 'A', type: 'structure', groups: 0, perGroup: 15, label: 'Melengkapi kalimat' },
-  { section: 2, part: 'B', type: 'written_expression', groups: 0, perGroup: 25, label: 'Menemukan kesalahan' },
-  { section: 3, part: 'A', type: 'reading', groups: 5, perGroup: 10, label: 'Bacaan' },
-]
-
-const SHORT: BlueprintBlock[] = [
-  { section: 1, part: 'A', type: 'listening_short', groups: 0, perGroup: 10, label: 'Percakapan pendek' },
-  { section: 1, part: 'C', type: 'listening_talk', groups: 1, perGroup: 4, label: 'Ceramah singkat' },
-  { section: 2, part: 'A', type: 'structure', groups: 0, perGroup: 6, label: 'Melengkapi kalimat' },
-  { section: 2, part: 'B', type: 'written_expression', groups: 0, perGroup: 8, label: 'Menemukan kesalahan' },
-  { section: 3, part: 'A', type: 'reading', groups: 1, perGroup: 10, label: 'Bacaan' },
-]
-
-export function blueprint(size: ExamSize): BlueprintBlock[] {
-  return size === 'full' ? FULL : SHORT
-}
-
-export function questionCount(size: ExamSize): number {
-  return blueprint(size).reduce(
+export function questionCount(kind: string, size: ExamSize): number {
+  return blueprint(kind, size).reduce(
     (sum, b) => sum + (b.groups === 0 ? b.perGroup : b.groups * b.perGroup),
     0,
   )
 }
 
 /** Jumlah soal per seksi — dipakai untuk penilaian dan tampilan */
-export function countsBySection(size: ExamSize): Record<1 | 2 | 3, number> {
-  const out = { 1: 0, 2: 0, 3: 0 } as Record<1 | 2 | 3, number>
-  for (const b of blueprint(size)) {
+export function countsBySection(kind: string, size: ExamSize): Record<ExamSection, number> {
+  const out = { 1: 0, 2: 0, 3: 0 } as Record<ExamSection, number>
+  for (const b of blueprint(kind, size)) {
     out[b.section] += b.groups === 0 ? b.perGroup : b.groups * b.perGroup
   }
   return out
 }
 
-export const SECTION_NAMES: Record<1 | 2 | 3, string> = {
-  1: 'Listening Comprehension',
-  2: 'Structure & Written Expression',
-  3: 'Reading Comprehension',
+/**
+ * POIN maksimum per seksi — bukan jumlah soal.
+ *
+ * Untuk hampir semua ujian keduanya sama: satu soal, satu poin. TOPIK 쓰기
+ * memecah kesamaan itu — empat soal, seratus poin — jadi penilaian memakai
+ * fungsi ini, sementara tampilan tetap memakai `countsBySection`.
+ */
+export function pointsBySection(kind: string, size: ExamSize): Record<ExamSection, number> {
+  const out = { 1: 0, 2: 0, 3: 0 } as Record<ExamSection, number>
+  for (const b of blueprint(kind, size)) {
+    const questions = b.groups === 0 ? b.perGroup : b.groups * b.perGroup
+    out[b.section] += questions * (b.points ?? 1)
+  }
+  return out
+}
+
+export function sectionNames(kind: string): Record<ExamSection, string> {
+  return examFormat(kind).sections
 }
 
 /** Batas waktu resmi per seksi, dalam menit */
-export const SECTION_MINUTES: Record<1 | 2 | 3, number> = { 1: 35, 2: 25, 3: 55 }
-
-export function sectionMinutes(section: 1 | 2 | 3, size: ExamSize): number {
-  const full = countsBySection('full')[section]
-  const now = countsBySection(size)[section]
-  if (now === 0) return 0
+export function sectionMinutes(kind: string, section: ExamSection, size: ExamSize): number {
+  const format = examFormat(kind)
+  const full = countsBySection(kind, 'full')[section]
+  const now = countsBySection(kind, size)[section]
+  if (now === 0 || full === 0) return 0
   // Mode short memakai waktu proporsional supaya tekanannya tetap terasa sama.
-  return Math.max(3, Math.round((SECTION_MINUTES[section] * now) / full))
+  return Math.max(3, Math.round((format.minutes[section] * now) / full))
+}
+
+export function totalMinutes(kind: string, size: ExamSize): number {
+  return ([1, 2, 3] as const).reduce((a, s) => a + sectionMinutes(kind, s, size), 0)
 }

@@ -12,6 +12,10 @@ export const ITEM_TYPES = [
   'reading',
   'error_spot',
   'script',
+  'sound',
+  'kanji',
+  'hanzi',
+  'quiz',
 ] as const
 export type ItemType = (typeof ITEM_TYPES)[number]
 

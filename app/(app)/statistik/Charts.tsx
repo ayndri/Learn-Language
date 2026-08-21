@@ -63,20 +63,26 @@ export function ActivityChart({
   )
 }
 
-/** Tren skor simulasi */
+/**
+ * Tren skor simulasi.
+ *
+ * `domain` datang dari format ujiannya, bukan dihardcode: TOEFL ITP berskala
+ * 310–677 dan JLPT 0–180. Menggambar keduanya pada sumbu yang sama akan
+ * membuat salah satunya tampak datar sempurna padahal berubah banyak.
+ */
 export function ExamTrendChart({
   data,
+  domain,
 }: {
   data: { label: string; total: number }[]
+  domain: [number, number]
 }) {
   return (
     <ResponsiveContainer width="100%" height={180}>
       <LineChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
         <CartesianGrid vertical={false} stroke={LINE} />
         <XAxis dataKey="label" {...axis} />
-        {/* Rentang resmi TOEFL ITP, bukan 0–100 — supaya kemajuannya terlihat
-            pada skala yang benar. */}
-        <YAxis domain={[310, 677]} {...axis} />
+        <YAxis domain={domain} {...axis} />
         <Tooltip {...tooltipStyle()} />
         <Line
           type="monotone"

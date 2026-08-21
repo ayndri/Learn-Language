@@ -10,6 +10,10 @@ import {
   totals,
   weakestTags,
 } from '@/lib/stats/queries'
+import { examFormat } from '@/lib/exam/formats'
+import { activeLanguageCode } from '@/lib/study/active'
+import { listTracks, resolveTrack } from '@/lib/study/next'
+import { switchLanguageAction } from '../actions'
 import { ActivityChart, ExamTrendChart } from './Charts'
 
 function pct(x: number): string {
@@ -27,21 +31,54 @@ export default async function StatistikPage() {
   const userId = await currentUserId()
   if (!userId) redirect('/login')
 
+  // Statistik disaring per bahasa, memakai bahasa aktif yang sama dengan
+  // dashboard. Sebelum ini semuanya digabung — dan begitu ada tiga bahasa,
+  // "grammar point terlemah" mencampur present perfect, 〜ば〜ほど, dan 은/는
+  // dalam satu daftar. Tidak ada satu tindakan pun yang masuk akal diambil
+  // dari daftar seperti itu.
+  const active = await activeLanguageCode()
+  const [track, tracks] = await Promise.all([resolveTrack(userId, active), listTracks(userId)])
+  const languageId = track?.language.id
+
   const [weak, byType, activity, exams, sum] = await Promise.all([
-    weakestTags(userId),
-    accuracyByType(userId),
-    dailyActivity(userId, 30),
+    weakestTags(userId, 'grammar:', languageId),
+    accuracyByType(userId, languageId),
+    dailyActivity(userId, 30, languageId),
     examTrend(userId),
-    totals(userId),
+    totals(userId, languageId),
   ])
 
-  const trend = exams.map((e, i) => ({
-    label: `#${i + 1}`,
-    total: e.total,
-  }))
+  // Nomor urutnya dihitung PER FORMAT: simulasi JLPT pertama harus tertulis #1,
+  // bukan #4 gara-gara sebelumnya ada tiga simulasi TOEFL.
+  const perKind: Record<string, number> = {}
+  const trend = exams.map((e) => {
+    perKind[e.kind] = (perKind[e.kind] ?? 0) + 1
+    return { label: `#${perKind[e.kind]}`, total: e.total, kind: e.kind, range: e.range }
+  })
 
   return (
     <main className="space-y-7">
+      {tracks.length > 1 && (
+        <form action={switchLanguageAction} className="flex flex-wrap items-center gap-1.5">
+          {tracks.map((t) => {
+            const on = t.languageId === languageId
+            return (
+              <button
+                key={t.trackId}
+                type="submit"
+                name="code"
+                value={t.code}
+                aria-pressed={on}
+                className={`badge px-3 py-1.5 transition ${
+                  on ? 'bg-brand text-white' : 'bg-canvas text-muted hover:text-ink'
+                }`}
+              >
+                {t.name}
+              </button>
+            )
+          })}
+        </form>
+      )}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-lg font-bold tracking-tight">Statistik</h1>
@@ -182,20 +219,40 @@ export default async function StatistikPage() {
             </Link>{' '}
             dan trennya mulai kelihatan.
           </p>
-        ) : trend.length === 1 ? (
-          <div className="card p-5 text-center">
-            <p className="text-3xl font-bold">{trend[0].total}</p>
-            <p className="mt-1 text-[13px] text-muted">
-              Satu simulasi belum jadi tren. Kerjakan lagi beberapa minggu ke depan.
-            </p>
-          </div>
         ) : (
-          <div className="card p-4">
-            <ExamTrendChart data={trend} />
-            <p className="mt-2 text-center text-xs text-faint">
-              skala TOEFL ITP 310–677 · angka ini perkiraan, bukan skor resmi
-            </p>
-          </div>
+          // Satu grafik per format ujian. Skor TOEFL 310–677 dan skor JLPT
+          // 0–180 tidak sebanding, jadi menaruhnya di satu garis bukan cuma
+          // jelek — angkanya jadi salah dibaca.
+          Object.entries(
+            trend.reduce<Record<string, typeof trend>>((acc, t) => {
+              ;(acc[t.kind] ??= []).push(t)
+              return acc
+            }, {}),
+          ).map(([kind, points]) => {
+            const format = examFormat(kind)
+            return (
+              <div key={kind} className="card p-4">
+                <p className="mb-2 text-[13px] font-semibold">{format.short}</p>
+                {points.length === 1 ? (
+                  <div className="py-3 text-center">
+                    <p className="text-3xl font-bold">{points[0].total}</p>
+                    <p className="mt-1 text-[13px] text-muted">
+                      Satu simulasi belum jadi tren. Kerjakan lagi beberapa minggu ke depan.
+                    </p>
+                  </div>
+                ) : (
+                  <ExamTrendChart
+                    data={points.map((p) => ({ label: p.label, total: p.total }))}
+                    domain={points[0].range}
+                  />
+                )}
+                <p className="mt-2 text-center text-xs text-faint">
+                  skala {format.short} {points[0].range[0]}–{points[0].range[1]} · angka ini
+                  perkiraan, bukan skor resmi
+                </p>
+              </div>
+            )
+          })
         )}
       </section>
     </main>

@@ -1,11 +1,12 @@
 'use server'
 
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { redirect } from 'next/navigation'
 import { requireUserId } from '@/auth'
 import { buildSyllabus } from '@/lib/study/syllabus'
 import { db } from '@/lib/db'
 import { languages, tracks, units } from '@/lib/db/schema'
+import { rememberLanguage } from '@/lib/study/active'
 
 export type StartState = { error?: string }
 
@@ -29,6 +30,19 @@ export async function startTrack(_prev: StartState, formData: FormData): Promise
   if (!language?.enabled) return { error: 'Bahasa tidak tersedia.' }
   if (!language.fieldTemplate.levels.includes(startLevel)) {
     return { error: `Level "${startLevel}" tidak berlaku untuk bahasa ${language.name}.` }
+  }
+
+  // Penjaga terakhir. Halaman /start sudah menyembunyikan bahasa yang jalurnya
+  // ada, tapi form lama di tab yang masih terbuka bisa tetap terkirim — dan
+  // akibatnya bukan error, melainkan silabus kedua yang menumpuk diam-diam di
+  // atas yang lama.
+  const [existing] = await db
+    .select({ id: tracks.id })
+    .from(tracks)
+    .where(and(eq(tracks.userId, userId), eq(tracks.languageId, languageId)))
+    .limit(1)
+  if (existing) {
+    return { error: `Jalur ${language.name} sudah ada. Pilih dari dashboard, bukan dibuat ulang.` }
   }
 
   let built
@@ -69,10 +83,20 @@ export async function startTrack(_prev: StartState, formData: FormData): Promise
       title: lesson.title,
       topic: lesson.topic,
       focus: lesson.focus,
-      wordList: lesson.words ?? null,
+      // Daftar kosong disimpan sebagai null, bukan []. Pelajaran "aturan khusus
+      // kana" memang tidak punya daftar tanda, dan [] akan membuat generator
+      // mengira daftarnya ada tapi isinya nol.
+      wordList: lesson.words?.length ? lesson.words : null,
+      wordListType: lesson.wordListType ?? (lesson.words ? 'vocab' : null),
+      itemPlan: lesson.itemTypes ?? null,
+      strand: lesson.strand ?? null,
       level: lesson.level,
     })),
   )
+
+  // Bahasa yang baru dibuat langsung jadi yang aktif. Kalau tidak, dashboard
+  // membuka jalur lama dan yang baru dibikin seolah-olah tidak terjadi apa-apa.
+  await rememberLanguage(language.code)
 
   redirect('/')
 }

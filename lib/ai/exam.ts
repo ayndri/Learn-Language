@@ -1,6 +1,28 @@
 import { z } from 'zod'
 import { ai } from '@/lib/ai/provider'
+import type { WritingScore } from '@/lib/ai/exam-zh'
+import { generateJlptBlock } from '@/lib/ai/exam-ja'
+import { gradeKoreanWriting, generateTopikBlock } from '@/lib/ai/exam-ko'
+import { gradeChineseWriting, generateHskBlock } from '@/lib/ai/exam-zh'
+import { gradeSpanishWriting, generateDeleBlock } from '@/lib/ai/exam-es'
+import {
+  checkChoice,
+  splitDialogue,
+  type GenerateExamResult,
+  type GeneratedQuestion,
+} from '@/lib/ai/exam-shared'
+import { examFormat } from '@/lib/exam/formats'
 import type { BlueprintBlock } from '@/lib/exam/blueprint'
+
+// Diteruskan supaya pemanggil lama (lib/exam/plan.ts) tidak perlu tahu bahwa
+// bagian bersama sekarang tinggal di file lain.
+export { splitCount, splitDialogue, MAX_PER_CALL } from '@/lib/ai/exam-shared'
+export type {
+  GenerateExamResult,
+  GeneratedGroup,
+  GeneratedQuestion,
+} from '@/lib/ai/exam-shared'
+export type { WritingScore } from '@/lib/ai/exam-zh'
 
 /**
  * Generator soal simulasi TOEFL ITP.
@@ -37,57 +59,9 @@ const baseQuestion = {
   explanation_id: z.string().min(1).describe('Penjelasan dalam bahasa Indonesia'),
 }
 
-export type GeneratedQuestion = {
-  stem: string
-  options: string[]
-  answerIndex: number
-  explanationId: string
-  audioScript?: string
-  /** pola grammar yang diuji — jadi tag saat soal salah diubah jadi item latihan */
-  grammarPoint?: string
-}
-
-export type GeneratedGroup = {
-  kind: 'passage' | 'conversation' | 'talk'
-  title: string | null
-  body: string
-  questions: GeneratedQuestion[]
-}
-
-export type GenerateExamResult = {
-  standalone: GeneratedQuestion[]
-  groups: GeneratedGroup[]
-  rejected: string[]
-}
-
 // ---------------------------------------------------------------------------
 // validasi yang tidak bisa diungkapkan JSON Schema
 // ---------------------------------------------------------------------------
-
-/**
- * Pecah naskah percakapan menjadi giliran bicara.
- *
- * Pemisahnya PENANDA PEMBICARA ("Man:", "Woman:", "Professor:"), bukan newline —
- * model sering menaruh seluruh percakapan dalam satu baris. Hasilnya dipakai
- * untuk validasi sekaligus untuk merapikan naskah sebelum disimpan.
- */
-export function splitDialogue(script: string): string[] {
-  return script
-    .replace(/\s*\b([A-Z][A-Za-z]{0,14}\s*:)/g, '\n$1')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-}
-
-function checkChoice(q: { stem: string; options: string[]; answer_index: number }): string[] {
-  const problems: string[] = []
-  const norm = q.options.map((o) => o.trim().toLowerCase())
-  if (new Set(norm).size !== 4) problems.push('ada pilihan yang duplikat')
-  if (norm.some((o) => !o)) problems.push('ada pilihan kosong')
-  if (q.answer_index < 0 || q.answer_index > 3) problems.push('answer_index di luar jangkauan')
-  if (!q.stem.trim()) problems.push('stem kosong')
-  return problems
-}
 
 // ---------------------------------------------------------------------------
 // Seksi 2 Part A — melengkapi kalimat
@@ -387,11 +361,35 @@ const WRITTEN_FOCUS = [
   'preposisi', 'kata ganti', 'paralelisme', 'perbandingan', 'bentuk tense', 'countable/uncountable',
 ]
 
-/** Generate satu blok cetak biru. `groupIndex` dipakai untuk memvariasikan topik. */
+/**
+ * Generate satu blok cetak biru.
+ *
+ * Format menentukan generator mana yang dipakai. Soal JLPT dibuat di
+ * `lib/ai/exam-ja.ts`, TOPIK di `exam-ko.ts`, HSK di `exam-zh.ts`, DELE di
+ * `exam-es.ts` — bukan sekadar beda bahasa, tapi beda BENTUK soal, jadi
+ * memaksakannya ke generator ini hanya akan menghasilkan soal TOEFL berbahasa
+ * Jepang. `groupIndex` dipakai untuk memvariasikan topik antar kelompok, dan
+ * pada DELE juga untuk menggilir ragam wilayahnya.
+ */
 export async function generateExamBlock(
+  kind: string,
   block: BlueprintBlock,
   groupIndex = 0,
 ): Promise<GenerateExamResult> {
+  const format = examFormat(kind)
+  if (format.scoring.type === 'jlpt') {
+    return generateJlptBlock(block, format.level ?? 'N5', groupIndex)
+  }
+  if (format.scoring.type === 'topik') {
+    return generateTopikBlock(block, format.label, groupIndex)
+  }
+  if (format.scoring.type === 'hsk') {
+    return generateHskBlock(block, format.label, format.level ?? 'HSK3', groupIndex)
+  }
+  if (format.scoring.type === 'dele') {
+    return generateDeleBlock(block, format.label, format.level ?? 'B1', groupIndex)
+  }
+
   switch (block.type) {
     case 'structure':
       return generateStructure(block.perGroup, STRUCTURE_FOCUS)
@@ -405,23 +403,41 @@ export async function generateExamBlock(
       return generateGroup('conversation', block.perGroup, groupIndex)
     case 'listening_talk':
       return generateGroup('talk', block.perGroup, groupIndex)
+    default:
+      return {
+        standalone: [],
+        groups: [],
+        rejected: [`jenis soal "${block.type}" bukan bagian dari ${format.label}`],
+      }
   }
 }
 
-/**
- * Blok besar dipecah jadi beberapa panggilan.
- *
- * Meminta 30 soal sekaligus membuat keluarannya panjang, mudah terpotong, dan
- * kualitasnya menurun di bagian akhir. Sepuluh per panggilan jauh lebih stabil.
- */
-export const MAX_PER_CALL = 10
 
-export function splitCount(total: number): number[] {
-  const parts: number[] = []
-  let left = total
-  while (left > 0) {
-    parts.push(Math.min(MAX_PER_CALL, left))
-    left -= MAX_PER_CALL
+/**
+ * Nilai satu jawaban karangan.
+ *
+ * Pemilihan rubriknya ditaruh DI SINI, bukan di server action, dengan alasan
+ * yang sama seperti `generateExamBlock`: satu tempat yang tahu format mana
+ * memakai generator mana. Sebelum ada bahasa kedua yang punya soal karangan,
+ * server action memanggil `gradeKoreanWriting` langsung — dan itu berarti
+ * jawaban 书写 HSK akan dinilai dengan rubrik TOPIK, dalam bahasa Korea,
+ * tanpa satu pun error yang kelihatan.
+ *
+ * Format tanpa soal karangan tidak pernah sampai ke sini: soalnya semua punya
+ * `answerIndex`, jadi server action menolaknya lebih dulu. Kalau ternyata
+ * sampai, rubrik TOPIK dipakai sebagai jaring — lebih baik dinilai dengan
+ * rubrik yang salah daripada gagal menyimpan tulisan yang sudah dikerjakan.
+ */
+export async function gradeExamWriting(
+  kind: string,
+  args: { prompt: string; guidance: string; answer: string; maxScore: number },
+): Promise<WritingScore> {
+  switch (examFormat(kind).scoring.type) {
+    case 'hsk':
+      return gradeChineseWriting(args)
+    case 'dele':
+      return gradeSpanishWriting(args)
+    default:
+      return gradeKoreanWriting(args)
   }
-  return parts
 }

@@ -16,6 +16,12 @@ import { DAY_START_HOUR, TIME_ZONE } from '@/lib/srs/day'
  * Catatan soal "benar": item yang dinilai sendiri (`vocab`, `phrase`) tidak punya
  * `was_correct`, jadi dipakai `rating >= 3` (Bisa/Gampang) sebagai penggantinya.
  * Tanpa itu, separuh riwayat latihan tidak ikut terhitung.
+ *
+ * Semua fungsi menerima `languageId` opsional. Sejak ada tiga bahasa aktif,
+ * statistik gabungan jadi menyesatkan: "grammar point terlemah" mencampur
+ * present perfect, 〜ば〜ほど, dan 은/는 dalam satu daftar — padahal ketiganya
+ * tidak bisa dibandingkan, dan tidak ada satu tindakan pun yang masuk akal
+ * diambil dari daftar campuran itu.
  */
 
 const CORRECT_EXPR = sql`coalesce(rl.was_correct, rl.rating >= 3)`
@@ -43,7 +49,11 @@ export type TagStat = {
  * Minimal 3 kali dijawab supaya satu kesalahan kebetulan tidak langsung tampil
  * sebagai "kelemahan terbesar".
  */
-export async function weakestTags(userId: string, prefix = 'grammar:'): Promise<TagStat[]> {
+export async function weakestTags(
+  userId: string,
+  prefix = 'grammar:',
+  languageId?: string,
+): Promise<TagStat[]> {
   const data = await rows(sql`
     SELECT tag,
            count(*)::int AS total,
@@ -53,6 +63,7 @@ export async function weakestTags(userId: string, prefix = 'grammar:'): Promise<
     CROSS JOIN LATERAL unnest(i.tags) AS tag
     WHERE rl.user_id = ${userId}
       AND tag LIKE ${prefix + '%'}
+      ${languageId ? sql`AND i.language_id = ${languageId}` : sql``}
     GROUP BY tag
     HAVING count(*) >= 3
     ORDER BY (count(*) FILTER (WHERE ${CORRECT_EXPR}))::float / count(*) ASC, count(*) DESC
@@ -76,7 +87,7 @@ export async function weakestTags(userId: string, prefix = 'grammar:'): Promise<
 export type TypeStat = { type: string; total: number; correct: number; accuracy: number }
 
 /** Ketepatan per jenis latihan — menunjukkan keterampilan mana yang tertinggal */
-export async function accuracyByType(userId: string): Promise<TypeStat[]> {
+export async function accuracyByType(userId: string, languageId?: string): Promise<TypeStat[]> {
   const data = await rows(sql`
     SELECT i.type,
            count(*)::int AS total,
@@ -84,6 +95,7 @@ export async function accuracyByType(userId: string): Promise<TypeStat[]> {
     FROM review_logs rl
     JOIN items i ON i.id = rl.item_id
     WHERE rl.user_id = ${userId}
+      ${languageId ? sql`AND i.language_id = ${languageId}` : sql``}
     GROUP BY i.type
     ORDER BY count(*) DESC
   `)
@@ -104,7 +116,11 @@ export type DayStat = { day: string; reviews: number; correct: number }
  * mulai jam 04:00. Kalau di sini pakai UTC, grafiknya akan bercerita lain
  * daripada angka streak di dashboard, dan salah satunya pasti salah.
  */
-export async function dailyActivity(userId: string, days = 30): Promise<DayStat[]> {
+export async function dailyActivity(
+  userId: string,
+  days = 30,
+  languageId?: string,
+): Promise<DayStat[]> {
   const data = await rows(sql`
     SELECT to_char(
              ((rl.reviewed_at AT TIME ZONE ${TIME_ZONE})
@@ -114,8 +130,10 @@ export async function dailyActivity(userId: string, days = 30): Promise<DayStat[
            count(*)::int AS reviews,
            count(*) FILTER (WHERE ${CORRECT_EXPR})::int AS correct
     FROM review_logs rl
+    JOIN items i ON i.id = rl.item_id
     WHERE rl.user_id = ${userId}
       AND rl.reviewed_at > now() - (${days} * interval '1 day')
+      ${languageId ? sql`AND i.language_id = ${languageId}` : sql``}
     GROUP BY 1
     ORDER BY 1
   `)
@@ -131,14 +149,17 @@ export type ExamPoint = {
   id: string
   date: Date
   size: 'full' | 'short'
+  /** id format ujiannya — skor dua format berbeda TIDAK boleh disatukan */
+  kind: string
   total: number
-  sections: { section: number; scaled: number }[]
+  range: [number, number]
+  sections: { label: string; scaled: number }[]
 }
 
 /** Tren skor simulasi — riwayatnya sudah tersimpan, cuma belum pernah dibaca */
 export async function examTrend(userId: string): Promise<ExamPoint[]> {
   const done = await db
-    .select({ id: exams.id, createdAt: exams.createdAt, size: exams.size })
+    .select({ id: exams.id, createdAt: exams.createdAt, size: exams.size, kind: exams.kind })
     .from(exams)
     .where(and(eq(exams.userId, userId), eq(exams.status, 'done')))
     .orderBy(asc(exams.createdAt))
@@ -147,9 +168,11 @@ export async function examTrend(userId: string): Promise<ExamPoint[]> {
 
   const out: ExamPoint[] = []
   for (const e of done) {
+    // Poin, bukan jumlah benar — soal karangan bernilai 10–50 poin. Untuk
+    // ujian tanpa karangan hasilnya sama persis dengan menghitung yang benar.
     const per = await rows(sql`
       SELECT q.section::int AS section,
-             count(*) FILTER (WHERE a.is_correct)::int AS correct,
+             coalesce(sum(coalesce(a.score, (a.is_correct)::int)), 0)::int AS correct,
              count(a.question_id)::int AS answered
       FROM exam_questions q
       LEFT JOIN exam_answers a ON a.question_id = q.id
@@ -164,13 +187,15 @@ export async function examTrend(userId: string): Promise<ExamPoint[]> {
       answered += Number(r.answered)
     }
 
-    const score = scoreExam({ size: e.size, correctBySection, answered })
+    const score = scoreExam({ kind: e.kind, size: e.size, correctBySection, answered })
     out.push({
       id: e.id,
       date: e.createdAt,
       size: e.size,
+      kind: e.kind,
       total: score.total,
-      sections: score.sections.map((s) => ({ section: s.section, scaled: s.scaled })),
+      range: score.range,
+      sections: score.sections.map((s) => ({ label: s.label, scaled: s.scaled })),
     })
   }
   return out
@@ -178,13 +203,15 @@ export async function examTrend(userId: string): Promise<ExamPoint[]> {
 
 export type Totals = { reviews: number; items: number; avgSeconds: number }
 
-export async function totals(userId: string): Promise<Totals> {
+export async function totals(userId: string, languageId?: string): Promise<Totals> {
   const [r] = await rows(sql`
     SELECT count(*)::int AS reviews,
            count(DISTINCT rl.item_id)::int AS items,
            coalesce(avg(rl.duration_ms), 0)::float AS avg_ms
     FROM review_logs rl
+    JOIN items i ON i.id = rl.item_id
     WHERE rl.user_id = ${userId}
+      ${languageId ? sql`AND i.language_id = ${languageId}` : sql``}
   `)
   return {
     reviews: Number(r?.reviews ?? 0),

@@ -4,12 +4,8 @@ import { notFound, redirect } from 'next/navigation'
 import { currentUserId } from '@/auth'
 import { db } from '@/lib/db'
 import { examAnswers, examGroups, examQuestions, exams, languages } from '@/lib/db/schema'
-import {
-  SECTION_NAMES,
-  countsBySection,
-  questionCount,
-  sectionMinutes,
-} from '@/lib/exam/blueprint'
+import { countsBySection, questionCount, sectionMinutes } from '@/lib/exam/blueprint'
+import { examFormat } from '@/lib/exam/formats'
 import { examSteps } from '@/lib/exam/plan'
 import { ExamRunner, type RunnerQuestion } from './ExamRunner'
 import { PrepareExam } from './PrepareExam'
@@ -43,6 +39,9 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
   if (!row) notFound()
   if (row.exam.status === 'done') redirect(`/exam/${id}/hasil`)
 
+  const format = examFormat(row.exam.kind)
+  const kind = row.exam.kind
+
   const header = (
     <div className="flex items-start justify-between gap-4">
       <div>
@@ -50,7 +49,7 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
           {row.exam.size === 'full' ? 'Simulasi penuh' : 'Latihan cepat'}
         </h1>
         <p className="mt-0.5 text-[13px] text-muted">
-          TOEFL ITP · {questionCount(row.exam.size)} soal
+          {format.label} · {questionCount(kind, row.exam.size)} soal
         </p>
       </div>
       <Link href="/exam" className="btn-ghost btn-sm shrink-0">
@@ -61,7 +60,7 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
 
   // --- belum ada soal → susun sekarang ---
   if (row.exam.status === 'planned') {
-    const steps = examSteps(row.exam.size).map((s) => ({
+    const steps = examSteps(kind, row.exam.size).map((s) => ({
       key: s.key,
       label: s.label,
       section: s.section,
@@ -73,13 +72,13 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
         <PrepareExam
           examId={id}
           steps={steps}
-          totalQuestions={questionCount(row.exam.size)}
+          totalQuestions={questionCount(kind, row.exam.size)}
         />
       </main>
     )
   }
 
-  const counts = countsBySection(row.exam.size)
+  const counts = countsBySection(kind, row.exam.size)
 
   // --- siap, belum dimulai → halaman pembuka ---
   if (row.exam.status === 'ready') {
@@ -103,10 +102,10 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
             .filter((s) => counts[s] > 0)
             .map((s) => ({
               section: s,
-              name: SECTION_NAMES[s],
+              name: format.sections[s],
               planned: counts[s],
               actual: actual[s] ?? 0,
-              minutes: sectionMinutes(s, row.exam.size),
+              minutes: sectionMinutes(kind, s, row.exam.size),
             }))}
         />
       </main>
@@ -123,6 +122,7 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
       audioScript: examQuestions.audioScript,
       stem: examQuestions.stem,
       options: examQuestions.options,
+      maxScore: examQuestions.maxScore,
       groupId: examQuestions.groupId,
       // `answerIndex` dan `explanationId` SENGAJA tidak diambil: selama ujian
       // berjalan, kunci jawaban tidak boleh sampai ke browser.
@@ -142,7 +142,11 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
     .where(eq(examGroups.examId, id))
 
   const saved = await db
-    .select({ questionId: examAnswers.questionId, chosen: examAnswers.chosen })
+    .select({
+      questionId: examAnswers.questionId,
+      chosen: examAnswers.chosen,
+      textAnswer: examAnswers.textAnswer,
+    })
     .from(examAnswers)
     .where(eq(examAnswers.examId, id))
 
@@ -153,7 +157,7 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
   const deadlines: Record<number, number> = {}
   for (const sec of [1, 2, 3] as const) {
     if (counts[sec] === 0) continue
-    acc += sectionMinutes(sec, row.exam.size) * 60_000
+    acc += sectionMinutes(kind, sec, row.exam.size) * 60_000
     deadlines[sec] = acc
   }
 
@@ -165,9 +169,19 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
         questions={questions as RunnerQuestion[]}
         groups={groups}
         deadlines={deadlines}
-        sectionNames={SECTION_NAMES}
+        sectionNames={format.sections}
+        // Seksi mana yang berisi soal menyimak berbeda tiap format: di TOEFL
+        // seksi 1, di JLPT seksi 3. Dulu ini diasumsikan selalu 1, dan itu
+        // membuat bacaan JLPT diperlakukan sebagai rekaman.
+        listeningSection={format.listeningSection}
+        script={row.language.script}
+        languageName={row.language.name}
+        writing={format.writing}
         initialAnswers={Object.fromEntries(
           saved.filter((s) => s.chosen !== null).map((s) => [s.questionId, s.chosen as number]),
+        )}
+        initialTexts={Object.fromEntries(
+          saved.filter((s) => s.textAnswer).map((s) => [s.questionId, s.textAnswer as string]),
         )}
       />
     </main>

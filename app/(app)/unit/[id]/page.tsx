@@ -1,12 +1,19 @@
 import { and, eq } from 'drizzle-orm'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
-import Markdown from 'react-markdown'
 import { currentUserId } from '@/auth'
 import { db } from '@/lib/db'
 import { items, languages, units } from '@/lib/db/schema'
-import { ITEM_REGISTRY, generatedItemTypes, implementedItemTypes } from '@/lib/items/registry'
+import { itemPreview } from '@/lib/items/preview'
+import {
+  ITEM_REGISTRY,
+  generatedItemTypes,
+  implementedItemTypes,
+  primaryKeyOf,
+} from '@/lib/items/registry'
 import { levelStyle } from '@/lib/languages/levels'
+import { EditItems, type EditableItem } from './EditItems'
+import { EditLesson } from './EditLesson'
 import { PrepareUnit } from './PrepareUnit'
 
 /**
@@ -37,13 +44,19 @@ export default async function UnitPage({ params }: { params: Promise<{ id: strin
   if (!row) notFound()
 
   const template = row.language.fieldTemplate
-  // Jenis yang berlaku = irisan antara yang didukung bahasa ini dan yang sudah
-  // diimplementasikan di registry. Tidak ada daftar hardcoded di sini.
-  const usable = template.itemTypes
+  // Rencana item pelajaran ini, kalau silabusnya menentukan. Selalu disaring
+  // ulang terhadap kemampuan bahasanya — rencana yang menyebut jenis yang tidak
+  // berlaku (mis. `kanji` untuk bahasa Inggris) diabaikan, bukan dipercaya.
+  const planned = row.unit.itemPlan?.length
+    ? template.itemTypes.filter((t) => row.unit.itemPlan!.includes(t))
+    : template.itemTypes
+  // Jenis yang berlaku = irisan antara yang direncanakan untuk unit ini dan yang
+  // sudah diimplementasikan di registry. Tidak ada daftar hardcoded di sini.
+  const usable = planned
     .filter((t) => implementedItemTypes().includes(t))
     .map((type) => ({ type, label: ITEM_REGISTRY[type]?.label ?? type }))
   // Yang digenerate AI saja — `listening` diturunkan dari kalimat & ungkapan.
-  const generated = generatedItemTypes(template).map((type) => ({
+  const generated = generatedItemTypes({ ...template, itemTypes: planned }).map((type) => ({
     type,
     label: ITEM_REGISTRY[type]?.label ?? type,
   }))
@@ -75,9 +88,7 @@ export default async function UnitPage({ params }: { params: Promise<{ id: strin
         <PrepareUnit
           unitId={id}
           itemTypes={generated}
-          hasDerived={
-            template.itemTypes.includes('listening') || template.itemTypes.includes('speaking')
-          }
+          hasDerived={planned.includes('listening') || planned.includes('speaking')}
           title={row.unit.title}
         />
       </main>
@@ -85,9 +96,18 @@ export default async function UnitPage({ params }: { params: Promise<{ id: strin
   }
 
   const itemRows = await db
-    .select({ id: items.id, type: items.type })
+    .select({ id: items.id, type: items.type, fields: items.fields })
     .from(items)
     .where(and(eq(items.unitId, id), eq(items.userId, userId)))
+
+  const primary = primaryKeyOf(template)
+  const editable: EditableItem[] = itemRows.map((r) => ({
+    id: r.id,
+    type: r.type,
+    label: ITEM_REGISTRY[r.type as keyof typeof ITEM_REGISTRY]?.label ?? r.type,
+    preview: itemPreview(r.fields as Record<string, unknown>, primary),
+    fields: r.fields as Record<string, unknown>,
+  }))
 
   const counts = usable
     .map((u) => ({ ...u, n: itemRows.filter((r) => r.type === u.type).length }))
@@ -117,12 +137,14 @@ export default async function UnitPage({ params }: { params: Promise<{ id: strin
           )}
         </div>
 
-        <div className="card p-5">
-          <div className="lesson">
-            <Markdown>{row.unit.lessonMd}</Markdown>
-          </div>
-        </div>
+        <EditLesson
+          unitId={id}
+          initial={row.unit.lessonMd}
+          verified={row.unit.lessonEdited}
+        />
       </section>
+
+      <EditItems items={editable} />
 
       <div className="card space-y-3 p-5">
         <p className="text-sm">Sudah dibaca? Latihannya mencakup:</p>

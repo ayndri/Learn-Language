@@ -21,6 +21,7 @@ const PALETTE: LevelStyle[] = [
   { text: 'text-lv-b1', bg: 'bg-lv-b1', soft: 'bg-lv-b1-soft', ring: 'ring-lv-b1' },
   { text: 'text-lv-b2', bg: 'bg-lv-b2', soft: 'bg-lv-b2-soft', ring: 'ring-lv-b2' },
   { text: 'text-lv-c1', bg: 'bg-lv-c1', soft: 'bg-lv-c1-soft', ring: 'ring-lv-c1' },
+  { text: 'text-lv-c2', bg: 'bg-lv-c2', soft: 'bg-lv-c2-soft', ring: 'ring-lv-c2' },
 ]
 
 export function levelStyle(level: string, levels: string[]): LevelStyle {

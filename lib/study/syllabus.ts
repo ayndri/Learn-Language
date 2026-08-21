@@ -1,6 +1,6 @@
 import { generateSyllabus, type SyllabusLesson } from '@/lib/ai/syllabus'
 import { curriculumFor } from '@/lib/languages/curriculum'
-import { vocabLessons } from '@/lib/languages/vocabulary'
+import { extraTracks, grammarItemTypes, type LessonTrack } from '@/lib/languages/tracks'
 
 /**
  * Susun daftar pelajaran untuk sebuah jalur belajar.
@@ -9,10 +9,16 @@ import { vocabLessons } from '@/lib/languages/vocabulary'
  *
  * 1. **Kurikulum tetap** (`lib/languages/curriculum.ts`) kalau bahasanya punya.
  *    Nol panggilan AI, hasilnya sama setiap kali, dan kelengkapannya bisa diaudit
- *    dengan membaca daftarnya. Inggris memakai jalur ini — 60 pelajaran.
+ *    dengan membaca daftarnya. Inggris (A1–C2), Jepang (N5–N1), Korea (1급–6급),
+ *    dan Mandarin (HSK 1–6) memakai jalur ini.
  *
  * 2. **Silabus buatan AI** untuk bahasa yang belum punya kurikulum tetap
- *    (Jepang, Korea, Spanyol). Lebih fleksibel, tapi tidak ada jaminan lengkap.
+ *    (Spanyol). Lebih fleksibel, tapi tidak ada jaminan lengkap.
+ *
+ * Di atas kurikulum grammar ada JALUR TAMBAHAN per bahasa (`lib/languages/tracks.ts`):
+ * kosakata akademik untuk Inggris; kana, kanji, dan kosakata inti untuk Jepang;
+ * hangul untuk Korea; pinyin dan hanzi untuk Mandarin. Semuanya diselipkan,
+ * bukan ditumpuk di belakang — lihat `interleave`.
  *
  * `goal` tidak mengubah daftar pelajaran pada jalur kurikulum tetap — ia dipakai
  * belakangan sebagai konteks saat menulis materi & latihan tiap pelajaran. Tujuan
@@ -40,7 +46,8 @@ export async function buildSyllabus(args: {
     // Ambil dari level awal ke atas. Tidak ada gunanya mengulang pelajaran
     // di bawah level yang sudah dikuasai.
     const startIndex = Math.max(0, args.levels.indexOf(args.startLevel))
-    const allowed = new Set(args.levels.slice(startIndex))
+    const allowedLevels = args.levels.slice(startIndex)
+    const allowed = new Set(allowedLevels)
 
     const grammar: SyllabusLesson[] = curriculum
       .filter((e) => allowed.has(e.level))
@@ -49,26 +56,39 @@ export async function buildSyllabus(args: {
         topic: e.context,
         focus: e.focus,
         level: e.level,
+        itemTypes: grammarItemTypes(args.languageCode, e.level, args.levels),
+        strand: e.strand ?? 'tatabahasa',
       }))
 
-    // Kosakata akademik disisipkan, bukan ditumpuk di belakang.
-    //
-    // Kalau 38 pelajaran kosakata ditaruh setelah 60 pelajaran grammar, praktis
-    // tidak akan pernah sampai ke sana. Diselipkan merata, keduanya jalan
-    // berdampingan — dan variasinya juga bikin belajar tidak monoton.
-    const vocab: SyllabusLesson[] = args.languageCode === 'en'
-      ? vocabLessons()
-          .map((v) => ({
-            title: v.title,
-            topic: `kosakata akademik: ${v.words.slice(0, 3).join(', ')}, dst`,
-            focus: `Menguasai ${v.words.length} kata AWL Sublist ${v.sublist}: ${v.words.join(', ')}`,
-            level: awlLevel(v.sublist, args.levels),
-            words: v.words,
-          }))
-          .filter((v) => allowed.has(v.level))
-      : []
+    const extra = extraTracks(args.languageCode, allowedLevels, args.levels)
 
-    const lessons = interleave(grammar, vocab)
+    const prefix = extra.filter((t) => t.mode === 'prefix').flatMap((t) => t.lessons)
+
+    // Grammar dipecah dulu per bagian materi (imbuhan vs pola kalimat) sebelum
+    // dianyam. Kalau tidak, bagian yang isinya sedikit ikut hanyut di dalam
+    // daftar besar dan urutannya jadi menumpuk di satu tempat.
+    const grammarStrands = [...new Set(grammar.map((l) => l.strand))].map((id) =>
+      grammar.filter((l) => l.strand === id),
+    )
+
+    const woven = [
+      ...grammarStrands,
+      ...extra.filter((t) => t.mode === 'interleave').map((t: LessonTrack) => t.lessons),
+    ]
+
+    // Diselipkan PER LEVEL, bukan sekali untuk seluruh silabus.
+    //
+    // Kalau seluruh daftar dianyam sekaligus, jalur yang pelajarannya lebih
+    // sedikit di level itu akan "mendahului" ke level berikutnya: kanji N4
+    // muncul di pelajaran ke-38 sementara grammar masih N5. Level yang tertulis
+    // di kartu jadi bohong, dan kosakatanya melompat lebih cepat daripada
+    // grammar yang seharusnya menopangnya.
+    const lessons = [...prefix]
+    for (const level of allowedLevels) {
+      const atLevel = (list: SyllabusLesson[]) => list.filter((l) => l.level === level)
+      lessons.push(...interleave(woven.map(atLevel)))
+    }
+
     if (lessons.length > 0) return { source: 'curriculum', lessons }
   }
 
@@ -83,37 +103,39 @@ export async function buildSyllabus(args: {
 }
 
 /**
- * Sublist AWL → level.
- *
- * Makin tinggi nomor sublist, makin jarang katanya dipakai, jadi makin sulit.
- * Dipetakan ke daftar level bahasanya (bukan nama level yang dihardcode) supaya
- * tetap benar kalau daftar levelnya berubah.
- */
-function awlLevel(sublist: number, levels: string[]): string {
-  const slot = sublist <= 2 ? 1 : sublist <= 5 ? 2 : sublist <= 8 ? 3 : 4
-  return levels[Math.min(slot, levels.length - 1)] ?? levels[0]
-}
-
-/**
- * Selipkan dua daftar secara MERATA menurut proporsinya.
+ * Selipkan beberapa daftar secara MERATA menurut proporsinya.
  *
  * Bukan sekadar bergantian: 60 grammar dan 38 kosakata kalau dibuat bergantian
  * satu-satu akan menyisakan 22 grammar menumpuk di belakang. Cara ini selalu
- * mengambil dari daftar yang progresnya paling tertinggal, jadi keduanya habis
+ * mengambil dari daftar yang progresnya paling tertinggal, jadi semuanya habis
  * di waktu yang bersamaan.
+ *
+ * Untuk bahasa Jepang ada tiga daftar sekaligus (grammar, kanji, kosakata), dan
+ * itu justru bagus: tiga hari berturut-turut mengerjakan kartu kanji saja
+ * membosankan, dan yang membosankan tidak dikerjakan.
  */
-function interleave<T>(a: T[], b: T[]): T[] {
+function interleave<T>(lists: T[][]): T[] {
+  const active = lists.filter((l) => l.length > 0)
+  const cursor = active.map(() => 0)
   const out: T[] = []
-  let i = 0
-  let j = 0
-  while (i < a.length || j < b.length) {
-    const aDone = i >= a.length
-    const bDone = j >= b.length
-    if (bDone || (!aDone && i / a.length <= j / b.length)) {
-      out.push(a[i++])
-    } else {
-      out.push(b[j++])
+
+  const total = active.reduce((a, l) => a + l.length, 0)
+  for (let n = 0; n < total; n++) {
+    let pick = -1
+    let worst = Infinity
+    for (let i = 0; i < active.length; i++) {
+      if (cursor[i] >= active[i].length) continue
+      // Progres relatif, bukan jumlah mutlak — daftar 130 pelajaran dan daftar
+      // 14 pelajaran harus sama-sama habis di ujung, bukan yang pendek duluan.
+      const progress = cursor[i] / active[i].length
+      if (progress < worst) {
+        worst = progress
+        pick = i
+      }
     }
+    if (pick < 0) break
+    out.push(active[pick][cursor[pick]++])
   }
+
   return out
 }

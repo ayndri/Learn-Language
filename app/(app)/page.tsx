@@ -3,10 +3,13 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { currentUserId } from '@/auth'
 import { db } from '@/lib/db'
-import { reviewLogs } from '@/lib/db/schema'
+import { languages, reviewLogs } from '@/lib/db/schema'
 import { levelStyle } from '@/lib/languages/levels'
+import { sortStrands, strandOf } from '@/lib/languages/strands'
 import { currentStreak, daysAgo } from '@/lib/srs/day'
-import { decideNext, trackProgress } from '@/lib/study/next'
+import { activeLanguageCode } from '@/lib/study/active'
+import { decideNext, listTracks, trackProgress } from '@/lib/study/next'
+import { switchLanguageAction } from './actions'
 
 /**
  * Pintu ke fitur di luar latihan harian.
@@ -20,8 +23,8 @@ const EXTRAS = [
     href: '/exam',
     icon: '📝',
     tint: 'bg-sun-soft',
-    title: 'Simulasi TOEFL ITP',
-    sub: '140 soal · baru tiap kali · yang salah bisa jadi latihan',
+    title: 'Simulasi ujian',
+    sub: 'TOEFL ITP & JLPT N5–N1 · baru tiap kali · yang salah bisa jadi latihan',
   },
   {
     href: '/statistik',
@@ -46,15 +49,31 @@ const EXTRAS = [
  * tidak boleh punya pendapat sendiri soal itu, supaya tombolnya tidak pernah
  * mengarah ke tempat yang berbeda dari yang dijanjikan labelnya.
  */
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>
+}) {
   const userId = await currentUserId()
   if (!userId) redirect('/login')
 
-  const progress = await trackProgress(userId)
+  const { tab } = await searchParams
+
+  // Bahasa aktif ditentukan sekali di sini, lalu diteruskan ke semua yang
+  // butuh — supaya kartu utama, peta jalur, dan tombolnya tidak mungkin
+  // menunjuk ke bahasa yang berbeda-beda.
+  const active = await activeLanguageCode()
+
+  const progress = await trackProgress(userId, active)
   if (!progress) redirect('/start')
 
-  const [next, reviewTimes] = await Promise.all([
-    decideNext(userId),
+  const [tracks, enabled, next, reviewTimes] = await Promise.all([
+    listTracks(userId),
+    db
+      .select({ id: languages.id })
+      .from(languages)
+      .where(eq(languages.enabled, true)),
+    decideNext(userId, active),
     db
       .select({ at: reviewLogs.reviewedAt })
       .from(reviewLogs)
@@ -63,13 +82,48 @@ export default async function DashboardPage() {
 
   const streak = currentStreak(reviewTimes.map((r) => r.at))
   const levels = progress.language.fieldTemplate.levels
-  const nextPosition = progress.lessons.find((l) => l.status === 'planned')?.position ?? null
+  const nextLesson = progress.lessons.find((l) => l.status === 'planned') ?? null
+  const nextPosition = nextLesson?.position ?? null
 
-  // 60 pelajaran terlalu panjang untuk satu daftar datar — dikelompokkan per level,
-  // dan hanya level yang sedang dikerjakan yang terbuka.
+  /**
+   * BAGIAN MATERI SEBAGAI TAB
+   *
+   * 380 pelajaran bahasa Jepang dalam satu daftar datar tidak bisa dibaca, dan
+   * lebih buruk lagi: menyamaratakan empat jenis bahan yang sebenarnya berbeda.
+   * "Hafal 12 kanji" dan "paham pola 〜ば〜ほど" itu pekerjaan yang berbeda.
+   *
+   * Tiap tab berdiri sendiri — daftar pelajarannya sendiri, progresnya sendiri,
+   * tombol lanjutnya sendiri. Tab yang terbuka disimpan di URL (`?tab=`), bukan
+   * di state klien, supaya halamannya tetap bisa di-bookmark dan tidak butuh
+   * JavaScript untuk berpindah.
+   */
+  const strands = sortStrands(
+    [...new Set(progress.lessons.map((l) => strandOf(l.strand).id))],
+    progress.language.code,
+  ).map((strand) => {
+    const lessons = progress.lessons.filter((l) => strandOf(l.strand).id === strand.id)
+    return {
+      strand,
+      lessons,
+      ready: lessons.filter((l) => l.status === 'ready').length,
+      // Pelajaran berikutnya DI DALAM bagian ini — bukan pelajaran berikutnya
+      // secara keseluruhan. Itu yang membuat tiap tab bisa dikerjakan sendiri.
+      next: lessons.find((l) => l.status === 'planned') ?? null,
+    }
+  })
+
+  // Tab yang terbuka: pilihan di URL kalau valid, kalau tidak bagian tempat
+  // pelajaran berikutnya berada — jadi membuka dashboard selalu mendarat di
+  // tempat kamu berhenti, bukan di tab pertama.
+  const openTab =
+    strands.find((s) => s.strand.id === tab) ??
+    strands.find((s) => s.strand.id === strandOf(nextLesson?.strand).id) ??
+    strands[0]
+
+  // Di dalam satu bagian, pelajaran tetap dikelompokkan per level.
   const groups = levels
     .map((level) => {
-      const lessons = progress.lessons.filter((l) => l.level === level)
+      const lessons = openTab?.lessons.filter((l) => l.level === level) ?? []
       return {
         level,
         lessons,
@@ -87,8 +141,44 @@ export default async function DashboardPage() {
         ? { label: 'Buka pelajaran baru', sub: next.title }
         : { label: 'Semua beres', sub: 'Balik lagi besok sesuai jadwal' }
 
+  // Bahasa yang belum punya jalur belajar — jadi tombol "tambah", bukan daftar
+  // yang berdiri sederajat dengan jalur yang sedang jalan.
+  const canAdd = enabled.length > tracks.length
+
   return (
     <main className="space-y-7">
+      {/* --- pemilih bahasa: hanya muncul kalau memang ada pilihan --- */}
+      {(tracks.length > 1 || canAdd) && (
+        <form action={switchLanguageAction} className="flex flex-wrap items-center gap-1.5">
+          {tracks.map((t) => {
+            const on = t.code === progress.language.code
+            return (
+              <button
+                key={t.trackId}
+                type="submit"
+                name="code"
+                value={t.code}
+                aria-pressed={on}
+                className={`badge gap-1.5 px-3 py-1.5 transition ${
+                  on ? 'bg-brand text-white' : 'bg-canvas text-muted hover:text-ink'
+                }`}
+              >
+                {t.name}
+                <span className="opacity-60">{t.nativeName}</span>
+              </button>
+            )
+          })}
+          {canAdd && (
+            <Link
+              href="/start"
+              className="badge bg-canvas px-3 py-1.5 text-muted transition hover:text-brand"
+            >
+              + bahasa
+            </Link>
+          )}
+        </form>
+      )}
+
       {/* --- kartu utama --- */}
       <section className="card animate-rise overflow-hidden">
         <div className="bg-brand-soft/70 px-5 py-4">
@@ -116,7 +206,10 @@ export default async function DashboardPage() {
               ✓ {cta.label}
             </div>
           ) : (
-            <Link href="/learn" className="btn-primary w-full py-3.5 text-base">
+            <Link
+              href={`/learn?lang=${progress.language.code}`}
+              className="btn-primary w-full py-3.5 text-base"
+            >
               {cta.label} →
             </Link>
           )}
@@ -150,12 +243,77 @@ export default async function DashboardPage() {
           <span className="text-xs text-faint">{progress.total} pelajaran</span>
         </div>
 
+        {/* --- tab bagian materi --- */}
+        {strands.length > 1 && (
+          <div className="-mx-4 overflow-x-auto px-4">
+            <div className="flex w-max gap-1.5">
+              {strands.map((s) => {
+                const on = s.strand.id === openTab?.strand.id
+                return (
+                  <Link
+                    key={s.strand.id}
+                    href={`/?tab=${s.strand.id}`}
+                    aria-current={on ? 'page' : undefined}
+                    className={`flex shrink-0 items-center gap-2 rounded-2xl border-2 px-3 py-2 text-sm transition ${
+                      on
+                        ? 'border-brand bg-brand-soft text-brand'
+                        : 'border-line-strong bg-surface text-muted hover:border-brand'
+                    }`}
+                  >
+                    <span className="text-base leading-none">{s.strand.icon}</span>
+                    <span className="font-semibold">{s.strand.label}</span>
+                    <span className="text-xs opacity-70">
+                      {s.ready}/{s.lessons.length}
+                    </span>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* --- ringkasan bagian yang sedang dibuka --- */}
+        {openTab && (
+          <div className="card space-y-3 p-4">
+            <div>
+              <p className="text-sm font-bold">{openTab.strand.label}</p>
+              <p className="mt-0.5 text-xs text-muted">{openTab.strand.note}</p>
+            </div>
+
+            <div className="h-1.5 overflow-hidden rounded-full bg-line">
+              <div
+                className="h-full rounded-full bg-brand transition-all"
+                style={{ width: `${(openTab.ready / openTab.lessons.length) * 100}%` }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-faint">
+                {openTab.ready} dari {openTab.lessons.length} pelajaran selesai
+              </span>
+              {openTab.next ? (
+                <Link href={`/unit/${openTab.next.id}`} className="btn-outline btn-sm shrink-0">
+                  Lanjutkan →
+                </Link>
+              ) : (
+                <span className="badge bg-good-soft text-good">tuntas</span>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="space-y-2.5">
           {groups.map((g) => (
             <details key={g.level} open={g.active} className="card group overflow-hidden">
               <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3.5 transition hover:bg-canvas">
+                {/*
+                  Lebarnya IKUT ISI, bukan kotak tetap.
+                  Awalnya `size-9` — pas untuk "A1" dan "N5", tapi nama level
+                  bukan selalu dua huruf: "TOPIK 1" langsung meluber keluar
+                  kotaknya. Tingginya tetap 36px supaya barisnya sejajar.
+                */}
                 <span
-                  className={`flex size-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white ${g.style.bg}`}
+                  className={`flex h-9 min-w-9 shrink-0 items-center justify-center rounded-xl px-2.5 text-xs font-bold whitespace-nowrap text-white ${g.style.bg}`}
                 >
                   {g.level}
                 </span>
@@ -218,6 +376,7 @@ export default async function DashboardPage() {
 
         <p className="px-1 text-xs text-faint">
           Materi dan latihan tiap pelajaran disiapkan otomatis saat kamu sampai di sana.
+          {strands.length > 1 && ' Tombol utama di atas tetap memutuskan urutan hariannya lintas bagian.'}
         </p>
       </section>
 

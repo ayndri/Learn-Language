@@ -11,7 +11,12 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
+    "db:add-unit-columns": "tsx --env-file=.env.local lib/db/add-unit-columns.ts",
     "db:seed-languages": "tsx --env-file=.env.local lib/db/seed-languages.ts",
+    "ai:smoke": "tsx --env-file=.env.local lib/ai/smoke-test.ts",
+    "db:add-exam-writing": "tsx --env-file=.env.local lib/db/add-exam-writing.ts",
+    "db:rename-ko-levels": "tsx --env-file=.env.local lib/db/rename-ko-levels.ts",
+    "db:sync-track": "tsx --env-file=.env.local lib/db/sync-track.ts",
     "db:seed-user": "tsx --env-file=.env.local lib/db/seed-user.ts"
   },
   "dependencies": {

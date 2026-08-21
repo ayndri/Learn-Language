@@ -55,11 +55,16 @@ persiapan TOEFL) + 38 kosakata **Academic Word List** (570 kata), diselipkan mer
 ±58 item per pelajaran, dari **5 panggilan AI** — dikte dan berbicara diturunkan dari item
 yang sudah ada, jadi gratis.
 
-### Simulasi TOEFL ITP
+### Simulasi ujian: TOEFL ITP, JLPT, TOPIK, HSK, DELE
 
-**140 soal, ±115 menit**, mengikuti struktur aslinya: Listening 50 · Structure & Written
-Expression 40 · Reading 50. Soalnya dibuat baru tiap kali, jadi tidak bisa dihafal.
-Audio Listening dibacakan Web Speech API — tidak ada file audio yang perlu disimpan.
+TOEFL ITP: **140 soal, ±115 menit**, mengikuti struktur aslinya (Listening 50 ·
+Structure & Written Expression 40 · Reading 50). Tersedia juga JLPT N5–N1, TOPIK I/II,
+HSK 1–6, dan DELE A1–C2 — masing-masing dengan bentuk soal dan cara penilaiannya sendiri,
+termasuk bagian karangan (TOPIK 쓰기, HSK 书写, DELE expresión escrita) yang dinilai AI
+dengan rubrik resminya. Bagian lisan DELE tidak ditiru: bicara tidak bisa dinilai
+otomatis, dan itu dinyatakan di halaman hasil, bukan disembunyikan.
+Soalnya dibuat baru tiap kali, jadi tidak bisa dihafal. Audio Listening dibacakan
+Web Speech API — tidak ada file audio yang perlu disimpan.
 
 Setelah selesai: perkiraan skor (skala 310–677), pembahasan tiap soal yang salah, dan tombol
 untuk **mengubah kesalahan jadi latihan harian** — Structure jadi soal isi-kosong yang harus
@@ -84,7 +89,8 @@ Ini bagian yang paling menentukan bentuk kodenya.
 **1 · Bahasa itu data.**
 Nambah bahasa = nambah satu entri di `lib/db/seed-languages.ts`. Tiap bahasa membawa
 _field template_-nya sendiri, jadi kartu Jepang otomatis punya kolom bacaan kana dan romaji
-tanpa satu pun `if (lang === 'ja')` di komponen.
+— dan kartu Mandarin punya kolom pinyin dan 量词 — tanpa satu pun `if (lang === 'ja')`
+di komponen.
 
 **2 · Jenis latihan itu kode, tapi terisolasi.**
 Beda dari bahasa: tiap jenis punya cara menilai yang berbeda, dan itu tidak bisa disimpan
@@ -214,8 +220,9 @@ tidak diblokir.
   pemula. Materi dibuat pendek dan berbasis pola untuk mengurangi risikonya, dan ada penanda
   "belum diverifikasi" di tiap materi. **Antarmuka untuk mengoreksi item belum ada** — itu
   pekerjaan berikutnya yang paling penting.
-- **Kurikulum tetap baru untuk bahasa Inggris.** Jepang, Korea, dan Spanyol sudah siap di
-  config tapi masih memakai silabus buatan AI, yang kelengkapannya tidak dijamin.
+- **Kurikulum tetap sudah ada untuk kelima bahasa** — Inggris (A1–C2), Jepang (N5–N1),
+  Korea (1급–6급), Mandarin (HSK 1–6), dan Spanyol (A1–C2). Jalur silabus buatan AI masih
+  ada sebagai jaring untuk bahasa berikutnya, tapi tidak dipakai bahasa mana pun yang aktif.
 - **Dikte dan berbicara tergantung browser.** Web Speech API tidak lengkap di Firefox dan
   Safari iOS; ada jalan mengetik sebagai gantinya.
 - **Satu pemakai.** Tabelnya sudah punya `user_id` di mana-mana, tapi belum ada pendaftaran.

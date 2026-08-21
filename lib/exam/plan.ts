@@ -22,10 +22,10 @@ export type ExamStep = {
   groupIndex: number
 }
 
-export function examSteps(size: ExamSize): ExamStep[] {
+export function examSteps(kind: string, size: ExamSize): ExamStep[] {
   const steps: ExamStep[] = []
 
-  for (const block of blueprint(size)) {
+  for (const block of blueprint(kind, size)) {
     if (block.groups === 0) {
       const chunks = splitCount(block.perGroup)
       chunks.forEach((count, i) => {

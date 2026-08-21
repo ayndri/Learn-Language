@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import { speak, useVoiceStatus } from '@/components/useVoice'
-import { answerExamAction, finishExamAction } from '../actions'
+import { answerExamAction, answerExamWritingAction, finishExamAction } from '../actions'
 
 /** Soal seperti yang dikirim ke klien — TANPA kunci jawaban. */
 export type RunnerQuestion = {
@@ -12,7 +12,10 @@ export type RunnerQuestion = {
   type: string
   audioScript: string | null
   stem: string
+  /** kosong = soal karangan, dijawab dengan teks */
   options: string[]
+  /** bobot nilai soal karangan */
+  maxScore: number | null
   groupId: string | null
 }
 
@@ -31,10 +34,118 @@ export type RunnerProps = {
   /** batas waktu tiap seksi sebagai epoch ms, dihitung dari startedAt di server */
   deadlines: Record<number, number>
   sectionNames: Record<number, string>
+  /** seksi yang berisi soal menyimak — 1 di TOEFL, 3 di JLPT */
+  listeningSection: number
+  /** 'latin' | 'japanese' | dst — penentu font, sama seperti di halaman latihan */
+  script: string
+  /** dipakai saat memberi tahu bahwa suara bahasa ini tidak tersedia */
+  languageName: string
+  /**
+   * Keterangan kotak karangan, dari `lib/exam/formats.ts`.
+   *
+   * Undefined untuk format tanpa soal karangan (TOEFL, JLPT, TOPIK I) — dan
+   * itu tidak masalah, karena format itu tidak pernah memunculkan kotaknya.
+   */
+  writing?: { placeholder: string; unit: string; rubric: string }
   initialAnswers: Record<string, number>
+  /** jawaban karangan yang sudah tersimpan, per id soal */
+  initialTexts: Record<string, string>
 }
 
 const LETTERS = ['A', 'B', 'C', 'D']
+
+/**
+ * Jawaban karangan (TOPIK 쓰기, HSK 书写).
+ *
+ * Dinilai saat tombol ditekan, bukan otomatis tiap ketikan: tiap penilaian satu
+ * panggilan AI, dan menilai draf setengah jadi cuma membakar kuota sambil
+ * memberi angka yang salah.
+ *
+ * Placeholder, satuan panjang, dan nama rubriknya datang dari FORMAT, bukan
+ * ditulis di sini. Dulu ketiganya ditulis langsung sebagai teks Korea — dan
+ * begitu bahasa kedua yang punya soal karangan masuk, kotak jawaban HSK ikut
+ * bertuliskan "한국어로 답을 쓰세요…" beserta rubrik TOPIK.
+ */
+function WritingAnswer({
+  examId,
+  question,
+  script,
+  spec,
+  initial,
+  onSaved,
+}: {
+  examId: string
+  question: RunnerQuestion
+  script: string
+  spec: RunnerProps['writing']
+  initial: string
+  onSaved: (text: string) => void
+}) {
+  const [text, setText] = useState(initial)
+  const [result, setResult] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [pending, startTransition] = useTransition()
+
+  // Karakter, bukan kata: bahasa Korea dan Mandarin tidak dipisah spasi per
+  // kata, dan syarat panjang di TOPIK maupun HSK memang dihitung per karakter.
+  const chars = [...text.trim()].length
+
+  const save = () => {
+    setError(null)
+    setResult(null)
+    startTransition(async () => {
+      const r = await answerExamWritingAction(examId, question.id, text)
+      if (r.error) setError(r.error)
+      else {
+        setResult(r.ok ?? null)
+        onSaved(text)
+      }
+    })
+  }
+
+  return (
+    <div className="space-y-3">
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={10}
+        placeholder={spec?.placeholder ?? 'Tulis jawabanmu…'}
+        className={`input min-h-52 resize-y leading-relaxed script-${script}`}
+      />
+
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-faint">
+          {chars}
+          {spec?.unit ?? ' karakter'}
+          {question.maxScore ? ` · ${question.maxScore} poin` : ''}
+        </span>
+        <button
+          type="button"
+          onClick={save}
+          disabled={pending || !text.trim()}
+          className="btn-outline btn-sm shrink-0 disabled:opacity-50"
+        >
+          {pending ? 'Menilai…' : result ? 'Nilai ulang' : 'Simpan & nilai'}
+        </button>
+      </div>
+
+      {result && (
+        <p className="rounded-2xl bg-good-soft px-3 py-2 text-[13px] leading-relaxed text-good">
+          {result}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="rounded-2xl bg-bad-soft px-3 py-2 text-[13px] text-bad">
+          {error}
+        </p>
+      )}
+      <p className="text-xs text-faint">
+        Nilai karangan diberikan AI dengan {spec?.rubric ?? 'rubrik resmi ujiannya'}. Anggap
+        komentarnya, bukan angkanya — penilai manusia pun berbeda-beda pada tulisan yang sama.
+      </p>
+    </div>
+  )
+}
 
 function formatLeft(ms: number): string {
   if (ms <= 0) return '00:00'
@@ -47,6 +158,7 @@ function formatLeft(ms: number): string {
 export function ExamRunner(props: RunnerProps) {
   const [index, setIndex] = useState(0)
   const [answers, setAnswers] = useState<Record<string, number>>(props.initialAnswers)
+  const [texts, setTexts] = useState<Record<string, string>>(props.initialTexts)
   const [now, setNow] = useState<number | null>(null)
   const [showNav, setShowNav] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -137,8 +249,8 @@ export function ExamRunner(props: RunnerProps) {
     return () => window.removeEventListener('keydown', onKey)
   }, [choose, go])
 
-  const answeredCount = Object.keys(answers).length
-  const isListening = q?.section === 1
+  const answeredCount = Object.keys(answers).length + Object.keys(texts).length
+  const isListening = q?.section === props.listeningSection
   const audioText = q?.audioScript ?? (isListening ? group?.body : null)
 
   if (!q) return null
@@ -196,7 +308,7 @@ export function ExamRunner(props: RunnerProps) {
                 className={`min-h-8 rounded-md py-1 text-[11px] font-medium sm:min-h-0 ${
                   i === index
                     ? 'bg-brand text-white'
-                    : answers[x.id] !== undefined
+                    : answers[x.id] !== undefined || texts[x.id]
                       ? 'bg-brand-soft text-brand'
                       : 'bg-canvas text-faint'
                 }`}
@@ -214,18 +326,40 @@ export function ExamRunner(props: RunnerProps) {
           <summary className="cursor-pointer list-none border-b border-line bg-canvas/60 px-4 py-2.5 text-[13px] font-semibold">
             {group.title ?? 'Bacaan'}
           </summary>
-          <div className="max-h-72 overflow-y-auto px-5 py-4 text-sm leading-relaxed whitespace-pre-line">
+          <div
+            className={`max-h-72 overflow-y-auto px-5 py-4 text-sm leading-relaxed whitespace-pre-line script-${props.script}`}
+          >
             {group.body}
           </div>
         </details>
       )}
 
-      {isListening && audioText && <AudioPanel text={audioText} lang={props.ttsLang} />}
+      {isListening && audioText && (
+        <AudioPanel
+          text={audioText}
+          lang={props.ttsLang}
+          languageName={props.languageName}
+          script={props.script}
+        />
+      )}
 
       {/* --- soal --- */}
       <div className="card animate-rise space-y-4 p-5">
-        <p className="text-[15px] leading-relaxed whitespace-pre-line">{q.stem}</p>
+        <p className={`text-[15px] leading-relaxed whitespace-pre-line script-${props.script}`}>
+          {q.stem}
+        </p>
 
+        {q.options.length === 0 ? (
+          <WritingAnswer
+            key={q.id}
+            examId={props.examId}
+            question={q}
+            script={props.script}
+            spec={props.writing}
+            initial={texts[q.id] ?? ''}
+            onSaved={(text) => setTexts((p) => ({ ...p, [q.id]: text }))}
+          />
+        ) : (
         <ul className="space-y-2">
           {q.options.map((opt, i) => {
             const picked = answers[q.id] === i
@@ -247,12 +381,13 @@ export function ExamRunner(props: RunnerProps) {
                   >
                     {LETTERS[i]}
                   </span>
-                  <span className="min-w-0">{opt}</span>
+                  <span className={`min-w-0 script-${props.script}`}>{opt}</span>
                 </button>
               </li>
             )
           })}
         </ul>
+        )}
       </div>
 
       {/* --- navigasi --- */}
@@ -314,7 +449,17 @@ export function ExamRunner(props: RunnerProps) {
  * atau disimpan. Naskahnya sendiri TIDAK ditampilkan; kalau terlihat, ini jadi
  * soal membaca, bukan mendengar.
  */
-function AudioPanel({ text, lang }: { text: string; lang: string }) {
+function AudioPanel({
+  text,
+  lang,
+  languageName,
+  script,
+}: {
+  text: string
+  lang: string
+  languageName: string
+  script: string
+}) {
   const status = useVoiceStatus(lang)
   const [played, setPlayed] = useState(0)
 
@@ -324,10 +469,12 @@ function AudioPanel({ text, lang }: { text: string; lang: string }) {
     return (
       <div className="card space-y-2 p-4">
         <p className="rounded-2xl bg-warn-soft px-3 py-2 text-xs text-warn">
-          Tidak ada suara Inggris di perangkat ini, jadi naskahnya ditampilkan. Di tes asli
-          bagian ini hanya didengar.
+          Tidak ada suara {languageName} di perangkat ini, jadi naskahnya ditampilkan. Di tes
+          asli bagian ini hanya didengar.
         </p>
-        <p className="text-sm leading-relaxed whitespace-pre-line text-muted">{text}</p>
+        <p className={`text-sm leading-relaxed whitespace-pre-line text-muted script-${script}`}>
+          {text}
+        </p>
       </div>
     )
   }

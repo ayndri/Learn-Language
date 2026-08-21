@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { currentUserId } from '@/auth'
+import { activeLanguageCode } from '@/lib/study/active'
 import { decideNext } from '@/lib/study/next'
 
 /**
@@ -9,11 +10,19 @@ import { decideNext } from '@/lib/study/next'
  * Halaman ini tidak menampilkan pilihan apa pun — ia memutuskan lalu mengarahkan.
  * Pengguna tidak perlu tahu apakah dia sedang mengulang atau memulai pelajaran baru.
  */
-export default async function LearnPage() {
+export default async function LearnPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ lang?: string }>
+}) {
   const userId = await currentUserId()
   if (!userId) redirect('/login')
 
-  const next = await decideNext(userId)
+  // `?lang=` menang atas cookie: tombol di dashboard membawanya secara eksplisit,
+  // jadi tombol yang bertuliskan "Ayo latihan" di bawah kartu Jepang tidak akan
+  // pernah mendarat di latihan bahasa Inggris — sekalipun cookienya basi.
+  const { lang } = await searchParams
+  const next = await decideNext(userId, lang ?? (await activeLanguageCode()))
 
   switch (next.kind) {
     case 'onboard':

@@ -7,6 +7,8 @@ import { generateItems } from '@/lib/ai/items'
 import { generateLesson } from '@/lib/ai/lesson'
 import { db } from '@/lib/db'
 import { itemStates, items, languages, units } from '@/lib/db/schema'
+import { itemPreview } from '@/lib/items/preview'
+import { primaryKeyOf } from '@/lib/items/registry'
 import { getItemType, implementedItemTypes } from '@/lib/items/registry'
 import { ITEM_TYPES, type ItemType } from '@/lib/items/types'
 import { initialState } from '@/lib/srs/fsrs'
@@ -49,6 +51,114 @@ async function loadOwnedUnit(unitId: string, userId: string) {
     .where(and(eq(units.id, unitId), eq(units.userId, userId)))
     .limit(1)
   return row
+}
+
+/**
+ * Simpan materi hasil koreksi.
+ *
+ * Menyimpan juga menyalakan `lessonEdited`, penanda "sudah diperiksa manusia".
+ * Penanda itu satu-satunya cara membedakan materi yang sudah kamu baca teliti
+ * dari yang baru keluar dari AI — dan yang boleh menyalakannya cuma tindakan
+ * manusia, bukan proses otomatis mana pun.
+ */
+export async function updateLessonAction(
+  unitId: string,
+  lessonMd: string,
+): Promise<ActionResult> {
+  const userId = await requireUserId()
+  const row = await loadOwnedUnit(unitId, userId)
+  if (!row) return { error: 'Unit tidak ditemukan.' }
+
+  const text = lessonMd.trim()
+  if (!text) return { error: 'Materi tidak boleh kosong.' }
+  if (text.length > 20_000) return { error: 'Materi terlalu panjang.' }
+
+  await db.update(units).set({ lessonMd: text, lessonEdited: true }).where(eq(units.id, unitId))
+  revalidatePath(`/unit/${unitId}`)
+  return { ok: 'Materi disimpan dan ditandai sudah diperiksa.' }
+}
+
+/**
+ * Simpan item hasil koreksi.
+ *
+ * Isinya divalidasi ulang terhadap schema jenis item itu — JSON yang bentuknya
+ * salah ditolak di sini, bukan disimpan lalu merusak kartu saat dilatih. Kunci
+ * anti-duplikat ikut dihitung ulang karena isinya berubah; kalau kunci barunya
+ * bentrok dengan item lain, perubahannya ditolak, bukan diam-diam menimpa.
+ */
+export async function updateItemAction(
+  itemId: string,
+  fields: Record<string, unknown>,
+): Promise<ActionResult> {
+  const userId = await requireUserId()
+
+  const [row] = await db
+    .select({ item: items, language: languages })
+    .from(items)
+    .innerJoin(languages, eq(languages.id, items.languageId))
+    .where(and(eq(items.id, itemId), eq(items.userId, userId)))
+    .limit(1)
+  if (!row) return { error: 'Item tidak ditemukan.' }
+
+  const type = row.item.type as ItemType
+  const def = getItemType(type)
+
+  const parsed = def.schema(row.language.fieldTemplate).safeParse(fields)
+  if (!parsed.success) {
+    const first = parsed.error.issues[0]
+    return { error: `Isian tidak valid: ${first.path.join('.')} — ${first.message}` }
+  }
+
+  const clean = parsed.data as Record<string, unknown>
+  const problems = def.check?.(clean) ?? []
+  if (problems.length) return { error: problems.join('; ') }
+
+  const dedupKey = def.dedupKey(clean)
+  const [clash] = await db
+    .select({ id: items.id })
+    .from(items)
+    .where(
+      and(
+        eq(items.userId, userId),
+        eq(items.languageId, row.item.languageId),
+        eq(items.dedupKey, dedupKey),
+      ),
+    )
+    .limit(1)
+  if (clash && clash.id !== itemId) {
+    return { error: 'Sudah ada item lain yang isinya sama.' }
+  }
+
+  await db
+    .update(items)
+    .set({ fields: clean, tags: def.tags(clean), dedupKey })
+    .where(eq(items.id, itemId))
+
+  revalidatePath(`/unit/${row.item.unitId}`)
+  return { ok: itemPreview(clean, primaryKeyOf(row.language.fieldTemplate)) }
+}
+
+/**
+ * Hapus satu item.
+ *
+ * Riwayat latihannya (`review_logs`) sengaja TIDAK ikut dihapus: statistik
+ * "berapa yang sudah kamu kerjakan" tidak boleh menyusut hanya karena satu
+ * kartu yang salah dibuang. Jadwal SRS-nya (`item_states`) ikut hilang lewat
+ * cascade, dan itu memang benar — kartunya sudah tidak ada.
+ */
+export async function deleteItemAction(itemId: string): Promise<ActionResult> {
+  const userId = await requireUserId()
+
+  const [row] = await db
+    .select({ unitId: items.unitId })
+    .from(items)
+    .where(and(eq(items.id, itemId), eq(items.userId, userId)))
+    .limit(1)
+  if (!row) return { error: 'Item tidak ditemukan.' }
+
+  await db.delete(items).where(eq(items.id, itemId))
+  revalidatePath(`/unit/${row.unitId}`)
+  return { ok: 'Item dihapus.' }
 }
 
 export async function generateLessonAction(unitId: string): Promise<ActionResult> {
@@ -102,6 +212,10 @@ export async function generateItemsAction(
     return { error: `Jenis "${itemType}" tidak berlaku untuk bahasa ${row.language.name}.` }
   }
 
+  // Unit lama (sebelum kolom ini ada) tidak punya `wordListType`; daftar kata
+  // di sana selalu milik kartu kosakata.
+  const listType = row.unit.wordListType ?? 'vocab'
+
   // Daftar yang sudah dimiliki dikirim ke prompt supaya AI tidak mengulang.
   // Unique constraint di DB tetap jadi jaring pengaman — prompt bukan jaminan.
   const owned = await db
@@ -122,9 +236,13 @@ export async function generateItemsAction(
       focus: row.unit.focus,
       // Pelajaran kosakata membawa daftar katanya sendiri; jumlah itemnya
       // mengikuti panjang daftar itu, bukan angka bawaan registry.
-      words: itemType === 'vocab' ? row.unit.wordList : null,
+      // Daftar wajib hanya berlaku untuk jenis yang memang dikendalikannya:
+      // daftar kanji untuk kartu kanji, daftar kata untuk kartu kosakata.
+      words: itemType === listType ? row.unit.wordList : null,
       count:
-        itemType === 'vocab' && row.unit.wordList?.length ? row.unit.wordList.length : wanted,
+        itemType === listType && row.unit.wordList?.length
+          ? row.unit.wordList.length
+          : wanted,
       existingKeys,
     })
   } catch (err) {
