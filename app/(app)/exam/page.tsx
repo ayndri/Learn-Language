@@ -29,9 +29,10 @@ export default async function ExamListPage() {
   // Hanya format untuk bahasa yang sudah diaktifkan. Menawarkan simulasi JLPT
   // saat bahasa Jepang masih mati cuma menghasilkan pesan error setelah diklik.
   const enabled = await db
-    .select({ code: languages.code })
+    .select({ code: languages.code, name: languages.name })
     .from(languages)
     .where(eq(languages.enabled, true))
+  const languageName = new Map(enabled.map((l) => [l.code, l.name]))
 
   const choices: FormatChoice[] = formatsForLanguages(enabled.map((l) => l.code)).map((f) => {
     const counts = countsBySection(f.id, 'full')
@@ -39,6 +40,12 @@ export default async function ExamListPage() {
       id: f.id,
       label: f.label,
       note: f.note,
+      // Nama bahasanya ikut, supaya pemilihnya bisa dikelompokkan. Tanpa ini
+      // "DELE B2" berdiri sederajat di sebelah "HSK 3" dan "JLPT N2" tanpa
+      // keterangan itu bahasa apa — wajar waktu cuma ada enam format, tidak
+      // lagi waktu ada dua puluh dari lima bahasa.
+      languageCode: f.languageCode,
+      languageName: languageName.get(f.languageCode) ?? f.languageCode,
       sections: ([1, 2, 3] as ExamSection[])
         .filter((s) => counts[s] > 0)
         .map((s) => ({

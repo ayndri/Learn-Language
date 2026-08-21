@@ -6,7 +6,7 @@ import { db } from '@/lib/db'
 import { languages } from '@/lib/db/schema'
 import { getItemType, primaryKeyOf } from '@/lib/items/registry'
 import type { ItemType } from '@/lib/items/types'
-import { NEW_PER_DAY, buildQueue } from '@/lib/study/queue'
+import { NEW_PER_DAY, NEW_PER_LANGUAGE_PER_DAY, buildQueue } from '@/lib/study/queue'
 import { PracticeSession, type PracticeItem } from './PracticeSession'
 
 /**
@@ -64,6 +64,7 @@ export default async function PracticePage({
       instruction: def.instruction,
       grading: def.grading,
       inputMode: def.inputMode ?? 'text',
+      unitId: r.unitId,
       fields,
     }
   })
@@ -77,8 +78,16 @@ export default async function PracticePage({
             <p className="font-medium">Tidak ada yang perlu diulang</p>
             <p className="mt-1 text-[13px] text-muted">
               {language.name} sudah beres untuk sekarang.
+              {/*
+                Dua pagu, jadi dua sebab yang berbeda — dan bedanya penting:
+                kuota bahasa ini habis berarti bahasa LAIN masih bisa dikerjakan
+                hari ini, sementara pagu total habis berarti sudahi saja.
+                Menyebut satu angka untuk keduanya membuat orang menutup aplikasi
+                padahal masih ada yang bisa dikerjakan.
+              */}
               {allowance === 0 &&
-                ` Kuota ${NEW_PER_DAY} item baru hari ini juga sudah terpakai — sengaja dibatasi supaya besok tidak menumpuk.`}
+                ` Kuota ${NEW_PER_LANGUAGE_PER_DAY} item baru untuk ${language.name} hari ini sudah terpakai` +
+                  ` (pagu total ${NEW_PER_DAY} item lintas semua bahasa) — sengaja dibatasi supaya besok tidak menumpuk.`}
             </p>
           </div>
           <div className="pt-1">

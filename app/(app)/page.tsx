@@ -4,12 +4,34 @@ import { redirect } from 'next/navigation'
 import { currentUserId } from '@/auth'
 import { db } from '@/lib/db'
 import { languages, reviewLogs } from '@/lib/db/schema'
+import { EXAM_FORMATS } from '@/lib/exam/formats'
 import { levelStyle } from '@/lib/languages/levels'
 import { sortStrands, strandOf } from '@/lib/languages/strands'
 import { currentStreak, daysAgo } from '@/lib/srs/day'
 import { activeLanguageCode } from '@/lib/study/active'
 import { decideNext, listTracks, trackProgress } from '@/lib/study/next'
+import { dueByLanguage } from '@/lib/study/queue'
 import { switchLanguageAction } from './actions'
+
+/**
+ * Ujian apa saja yang tersedia, DITURUNKAN dari daftar formatnya.
+ *
+ * Sebelumnya kalimat ini ditulis tangan: "TOEFL ITP & JLPT N5–N1". Lalu TOPIK
+ * masuk, HSK masuk, DELE masuk — dan kalimatnya tetap menjanjikan dua dari lima.
+ * Ini satu-satunya tempat fitur simulasi diperkenalkan di dashboard, jadi tiga
+ * ujian praktis tidak pernah diumumkan ke pemakainya sendiri.
+ *
+ * Nama keluarganya diambil dari kata PERTAMA `short` tiap format: "JLPT N5" →
+ * JLPT, "TOPIK I" → TOPIK, "DELE A1" → DELE. Terlihat seperti trik, tapi inilah
+ * yang membuat kalimatnya tidak bisa basi lagi — format keenam akan muncul di
+ * sini tanpa ada yang perlu ingat memperbaruinya. Kalau suatu saat ada format
+ * yang namanya tidak diawali nama keluarganya, yang muncul cuma kata pertamanya,
+ * dan itu tetap benar — bukan salah.
+ */
+function examFamilies(): string {
+  const names = [...new Set(Object.values(EXAM_FORMATS).map((f) => f.short.split(' ')[0]))]
+  return names.join(' · ')
+}
 
 /**
  * Pintu ke fitur di luar latihan harian.
@@ -24,7 +46,7 @@ const EXTRAS = [
     icon: '📝',
     tint: 'bg-sun-soft',
     title: 'Simulasi ujian',
-    sub: 'TOEFL ITP & JLPT N5–N1 · baru tiap kali · yang salah bisa jadi latihan',
+    sub: `${examFamilies()} · baru tiap kali · yang salah bisa jadi latihan`,
   },
   {
     href: '/statistik',
@@ -67,7 +89,7 @@ export default async function DashboardPage({
   const progress = await trackProgress(userId, active)
   if (!progress) redirect('/start')
 
-  const [tracks, enabled, next, reviewTimes] = await Promise.all([
+  const [tracks, enabled, next, reviewTimes, duePerLanguage] = await Promise.all([
     listTracks(userId),
     db
       .select({ id: languages.id })
@@ -78,6 +100,7 @@ export default async function DashboardPage({
       .select({ at: reviewLogs.reviewedAt })
       .from(reviewLogs)
       .where(and(eq(reviewLogs.userId, userId), gte(reviewLogs.reviewedAt, daysAgo(60)))),
+    dueByLanguage(userId),
   ])
 
   const streak = currentStreak(reviewTimes.map((r) => r.at))
@@ -152,6 +175,7 @@ export default async function DashboardPage({
         <form action={switchLanguageAction} className="flex flex-wrap items-center gap-1.5">
           {tracks.map((t) => {
             const on = t.code === progress.language.code
+            const due = duePerLanguage.get(t.languageId) ?? 0
             return (
               <button
                 key={t.trackId}
@@ -165,6 +189,26 @@ export default async function DashboardPage({
               >
                 {t.name}
                 <span className="opacity-60">{t.nativeName}</span>
+                {/*
+                  Angka jatuh tempo, dan HANYA kalau ada isinya.
+                  Lencana "0" di lima bahasa cuma jadi derau yang membuat angka
+                  yang benar-benar penting ikut tidak dilihat. Yang perlu menarik
+                  mata adalah bahasa yang sedang menumpuk — bukan yang bersih.
+
+                  Ditampilkan juga pada bahasa yang SEDANG aktif, karena kalau
+                  disembunyikan di situ, satu-satunya bahasa yang tidak
+                  memperlihatkan tumpukannya justru yang sedang kamu buka.
+                */}
+                {due > 0 && (
+                  <span
+                    aria-label={`${due} kartu jatuh tempo`}
+                    className={`-mr-1 rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${
+                      on ? 'bg-white/25 text-white' : 'bg-warn-soft text-warn'
+                    }`}
+                  >
+                    {due}
+                  </span>
+                )}
               </button>
             )
           })}

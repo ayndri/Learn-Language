@@ -25,6 +25,8 @@ export type PracticeItem = {
   grading: GradingMode
   /** 'voice' = jawaban diucapkan, bukan ditulis */
   inputMode: 'text' | 'voice'
+  /** pelajaran asal kartu ini — tujuan tombol "kartu ini salah" */
+  unitId: string
   fields: Record<string, unknown>
 }
 
@@ -315,9 +317,10 @@ function Card(c: CardProps) {
     : 'animate-rise'
   return (
     <div className={`card overflow-hidden ${anim}`}>
-      <p className="border-b border-line bg-canvas/60 px-5 py-2 text-xs text-muted">
-        {item.instruction}
-      </p>
+      <div className="flex items-center justify-between gap-3 border-b border-line bg-canvas/60 px-5 py-2">
+        <p className="min-w-0 text-xs text-muted">{item.instruction}</p>
+        <ReportLink item={item} />
+      </div>
 
       {item.grading === 'choice' ? (
         <ChoicePrompt {...c} />
@@ -331,6 +334,41 @@ function Card(c: CardProps) {
 
       <Footer {...c} />
     </div>
+  )
+}
+
+/**
+ * "Kartu ini salah" — jalan keluar saat AI mengarang sesuatu yang salah.
+ *
+ * Ini melengkapi lubang yang nyata. Antarmuka koreksi item memang sudah ada,
+ * tapi tempatnya di halaman pelajaran — sementara satu-satunya saat kamu
+ * benar-benar MENYADARI sebuah kartu salah adalah waktu mengerjakannya. Tanpa
+ * tautan ini kamu harus mengingat kartu yang mana, menyelesaikan sesi, lalu
+ * mencari pelajarannya; dan kartu yang salah tapi lupa dilaporkan akan terus
+ * dijadwalkan FSRS sampai kamu menghafalnya dengan benar — menghafal hal yang
+ * salah, berulang-ulang, tepat karena mesinnya bekerja.
+ *
+ * Dibuka di TAB BARU, dan itu bagian yang penting: sesi latihan tidak boleh
+ * hilang gara-gara melaporkan satu kartu. Kamu lanjut mengerjakan, kartu yang
+ * rusak menunggu di tab sebelah.
+ *
+ * Sengaja TIDAK menyimpan penanda "dilaporkan" di database. Penanda begitu
+ * butuh kolom baru, halaman daftar laporan, dan alur "selesai ditangani" —
+ * padahal yang memakai aplikasi ini satu orang yang juga bisa langsung
+ * memperbaikinya di tab yang baru terbuka. Menunda pekerjaan ke daftar tugas
+ * cuma memindahkan masalahnya.
+ */
+function ReportLink({ item }: { item: PracticeItem }) {
+  return (
+    <Link
+      href={`/unit/${item.unitId}`}
+      target="_blank"
+      rel="noopener"
+      title="Buka pelajarannya di tab baru untuk memperbaiki atau menghapus kartu ini"
+      className="shrink-0 text-xs text-faint underline decoration-dotted transition hover:text-bad"
+    >
+      kartu ini salah
+    </Link>
   )
 }
 

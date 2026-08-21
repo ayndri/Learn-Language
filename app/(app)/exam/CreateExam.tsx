@@ -7,6 +7,8 @@ export type FormatChoice = {
   id: string
   label: string
   note: string
+  languageCode: string
+  languageName: string
   /** nama seksi + jumlah soal + menit, untuk versi penuh */
   sections: { name: string; questions: number; minutes: number }[]
   sizes: { size: 'full' | 'short'; questions: number; minutes: number }[]
@@ -18,7 +20,35 @@ export type FormatChoice = {
  * Formatnya datang dari server (`lib/exam/formats.ts` disaring ke bahasa yang
  * sudah aktif), bukan didaftar ulang di sini — kalau nanti ada JLPT N0 atau
  * IELTS, komponen ini tidak perlu disentuh.
+ *
+ * DIKELOMPOKKAN PER BAHASA, dan itu bukan sekadar kerapian. Waktu formatnya cuma
+ * TOEFL plus lima JLPT, satu baris lencana masih terbaca. Dua puluh lencana dari
+ * lima bahasa tidak: "DELE B2" berdiri sederajat di sebelah "HSK 3" tanpa
+ * petunjuk itu bahasa apa, dan kamu harus mengenali nama tiap ujian untuk tahu
+ * mana yang relevan. Yang kamu cari hampir selalu "ujian untuk bahasa yang
+ * sedang kupelajari" — jadi bahasanya yang jadi judul, bukan sekadar keterangan.
+ *
+ * Urutan bahasanya mengikuti urutan format dari server (`sortOrder` di tabel
+ * `languages`), bukan abjad — supaya sama dengan urutan di dashboard.
  */
+/**
+ * Format → dikelompokkan per bahasa, urutan bahasa mengikuti kemunculan
+ * pertamanya di daftar dari server.
+ *
+ * `Map` dipakai justru karena ia mempertahankan urutan penyisipan — itu yang
+ * membuat urutan `sortOrder` dari server ikut terbawa tanpa perlu menyortir
+ * ulang di sini (dan tanpa risiko urutannya berbeda dari dashboard).
+ */
+function groupByLanguage(formats: FormatChoice[]): [string, FormatChoice[]][] {
+  const byLanguage = new Map<string, FormatChoice[]>()
+  for (const f of formats) {
+    const list = byLanguage.get(f.languageName)
+    if (list) list.push(f)
+    else byLanguage.set(f.languageName, [f])
+  }
+  return [...byLanguage]
+}
+
 export function CreateExam({ formats }: { formats: FormatChoice[] }) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -38,18 +68,30 @@ export function CreateExam({ formats }: { formats: FormatChoice[] }) {
       <h2 className="text-[13px] font-bold tracking-wide text-faint uppercase">Mulai simulasi</h2>
 
       {formats.length > 1 && (
-        <div className="flex flex-wrap gap-1.5">
-          {formats.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setPicked(f.id)}
-              className={`badge px-3 py-1.5 transition ${
-                f.id === picked ? 'bg-brand text-white' : 'bg-canvas text-muted hover:text-ink'
-              }`}
-            >
-              {f.label}
-            </button>
+        <div className="space-y-2">
+          {groupByLanguage(formats).map(([language, group]) => (
+            <div key={language} className="flex flex-wrap items-center gap-1.5">
+              <span className="w-16 shrink-0 text-[11px] font-semibold tracking-wide text-faint uppercase">
+                {language}
+              </span>
+              {group.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setPicked(f.id)}
+                  className={`badge px-3 py-1.5 transition ${
+                    f.id === picked ? 'bg-brand text-white' : 'bg-canvas text-muted hover:text-ink'
+                  }`}
+                >
+                  {/*
+                    Nama bahasanya sudah jadi judul baris, jadi dibuang dari
+                    lencananya: "DELE A1" bukan "Spanyol DELE A1". Yang tersisa
+                    justru bagian yang membedakan satu format dari yang lain.
+                  */}
+                  {f.label}
+                </button>
+              ))}
+            </div>
           ))}
         </div>
       )}
