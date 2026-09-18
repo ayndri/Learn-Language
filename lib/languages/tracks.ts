@@ -1,6 +1,7 @@
 import type { SyllabusLesson } from '@/lib/ai/syllabus'
 import type { ItemType } from '@/lib/items/types'
-import { EN_AFFIXES, EN_CONVERSATION, EN_SOUNDS } from '@/lib/languages/en/foundations'
+import { EN_CONVERSATION } from '@/lib/languages/en/conversation'
+import { EN_AFFIXES, EN_SOUNDS } from '@/lib/languages/en/foundations'
 import { EN_VOCAB_THEMES } from '@/lib/languages/en/vocabulary'
 import { ES_CONVERSATION } from '@/lib/languages/es/conversation'
 import { ES_SOUNDS } from '@/lib/languages/es/sounds'
