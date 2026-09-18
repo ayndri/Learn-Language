@@ -4,6 +4,7 @@ import { notFound, redirect } from 'next/navigation'
 import { currentUserId } from '@/auth'
 import { db } from '@/lib/db'
 import { items, languages, units } from '@/lib/db/schema'
+import { hasAnnotations } from '@/lib/items/annotate'
 import { itemPreview } from '@/lib/items/preview'
 import {
   ITEM_REGISTRY,
@@ -141,6 +142,9 @@ export default async function UnitPage({ params }: { params: Promise<{ id: strin
           unitId={id}
           initial={row.unit.lessonMd}
           verified={row.unit.lessonEdited}
+          ttsLang={row.language.ttsLang}
+          languageName={row.language.name}
+          hasAnnotations={hasAnnotations(row.unit.lessonMd)}
         />
       </section>
 

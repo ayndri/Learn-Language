@@ -301,3 +301,46 @@ body {
 .lesson code {
   @apply rounded-lg bg-brand-soft px-1.5 py-0.5 text-[13px] font-medium text-brand-dark;
 }
+
+/* ---------------------------------------------------------------------------
+ * Kata beranotasi: cara baca di atas kata, arti muncul saat disentuh.
+ *
+ * Baris yang memuat ruby jadi lebih tinggi — itu tidak bisa dihindari, karena
+ * bacaannya memang butuh ruang. Yang bisa dijaga adalah tingginya KONSISTEN:
+ * `line-height` diberi ruang tetap lewat `.lesson p`/`li` di atas, jadi baris
+ * yang punya anotasi tidak melompat lebih jauh daripada yang tidak.
+ * ------------------------------------------------------------------------- */
+
+/* Kata bahasa target dalam materi memakai font bahasanya. Tanpa ini, glyph CJK
+   di tengah kalimat Indonesia jatuh ke font fallback sistem dan bentuknya
+   berbeda dari kartu latihan — untuk kartu karakter itu berarti goresan yang
+   ditampilkan tidak sama. Kelasnya dipasang oleh komponen `Annotated`. */
+.annotated {
+  font-family: inherit;
+}
+
+.lesson ruby {
+  /* `under` menaruh bacaan di ATAS untuk teks mendatar (namanya menyesatkan:
+     ia mengacu pada sisi "bawah" dalam penulisan vertikal). Ini yang dipakai
+     furigana dan pinyin di buku cetak. */
+  ruby-position: over;
+  ruby-align: center;
+}
+
+.lesson rt {
+  /* 0.55em: cukup terbaca, tapi jelas SEKUNDER. Kalau ukurannya mendekati
+     katanya, mata membaca bacaannya dan mengabaikan aksaranya — dan yang
+     seharusnya dipelajari justru aksaranya. */
+  @apply font-normal text-faint;
+  font-size: 0.55em;
+  line-height: 1.2;
+  /* Bacaan tidak pernah perlu dipilih atau disalin sendirian, dan kalau ikut
+     terpilih, menyalin satu kalimat menghasilkan teks yang tercampur bacaannya. */
+  user-select: none;
+}
+
+/* `<rp>` hanya untuk browser tanpa dukungan ruby — di browser yang mendukung,
+   tanda kurungnya harus tidak terlihat. */
+.lesson rp {
+  display: none;
+}

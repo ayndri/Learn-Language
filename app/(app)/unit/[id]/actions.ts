@@ -173,6 +173,10 @@ export async function generateLessonAction(unitId: string): Promise<ActionResult
       topic: row.unit.topic,
       level: row.unit.level,
       focus: row.unit.focus,
+      // Template kosakata bahasanya yang menentukan cara baca macam apa yang
+      // diminta di materi — kana, pinyin, romanisasi, atau tidak sama sekali.
+      template: row.language.fieldTemplate,
+      script: row.language.script,
     })
 
     await db
